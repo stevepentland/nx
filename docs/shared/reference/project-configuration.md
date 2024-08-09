@@ -200,6 +200,26 @@ If you are using distributed task execution and disable caching for a given targ
 
 {% /callout %}
 
+### Parallelism
+
+In Nx 19.5.0+, tasks can be configured to support parallelism or not. By default, tasks are run in parallel with other tasks on a given machine. However, in some cases, tasks can require a shared resource such as a port or memory. For these cases, setting `"parallelism": false`, will ensure that those tasks will not run in parallel with other tasks on a single machine. For example, if the `e2e` tasks all require port 4200, running them in parallel will conflict so the targets can specify to not support parallelism:
+
+```json {% fileName="project.json" %}
+{
+  "targets": {
+    "e2e": {
+      "parallelism": false
+    }
+  }
+}
+```
+
+{% callout type="warning" title="Note: Parallelism is only per machine" %}
+
+If you are using distributed task execution, tasks will still be run simultaneously on different machines. Because different agents do not share resources with one another, it is perfectly fine for multiple agents to run tasks which do not support parallelism at the same time. Therefore, using Nx Agents is key to running tasks which do not support parallelism quickly and efficiently.
+
+{% /callout %}
+
 ### Inputs and Named Inputs
 
 Each cacheable task needs to define `inputs` which determine whether the task outputs can be retrieved from the cache or the task needs to be re-run. The `namedInputs` defined in `nx.json` or project level configuration are sets of reusable input definitions.
@@ -420,6 +440,27 @@ You can also express task dependencies with an object syntax:
 {% /tab %}
 {% /tabs %}
 
+Starting from v19.5.0, wildcards can be used to define dependencies in the `dependsOn` field.
+
+```json
+{
+  "targets": {
+    "test": {
+      "dependsOn": [
+        {
+          "target": "build", // target name
+          "params": "ignore" // "forward" or "ignore", defaults to "ignore"
+        },
+        "build-*", // support for using wildcards in dependsOn, matches: "build-css", "build-js" targets of current project
+        "^build-*", // matches tasks: "build-css", "build-js" targets of dependencies
+        "*build-*", // matches tasks: "build-css", "build-js" as well as "task-with-build-in-middle" targets of current project
+        "^*build-*" // matches tasks: "build-css", "build-js" as well as "task-with-build-in-middle" targets of dependencies
+      ]
+    }
+  }
+}
+```
+
 #### Examples
 
 You can write the shorthand configuration above in the object syntax like this:
@@ -609,6 +650,23 @@ In the case of an explicit target using an executor, you can specify the executo
 }
 ```
 
+### Target Metadata
+
+You can add additional metadata to be attached to a target. For example, you can provide a description stating what the
+target does:
+
+```jsonc {% fileName="project.json" %}
+{
+  "targets": {
+    "build": {
+      "metadata": {
+        "description": "Build the application for production"
+      }
+    }
+  }
+}
+```
+
 ## Project Metadata
 
 The following properties describe the project as a whole.
@@ -728,7 +786,21 @@ An implicit dependency could also be a glob pattern:
 {% /tab %}
 {% /tabs %}
 
-### Including package.json files as projects in the graph
+### Metadata
+
+You can add additional metadata to be attached to the project. For example, you can provide a description for your
+project:
+
+```jsonc {% fileName="project.json" %}
+{
+  "name": "admin",
+  "metadata": {
+    "description": "This is the admin application"
+  }
+}
+```
+
+## Including package.json files as projects in the graph
 
 Any `package.json` file that is referenced by the `workspaces` property in the root `package.json` file will be included as a project in the graph. If you are using Lerna, projects defined in `lerna.json` will be included. If you are using pnpm, projects defined in `pnpm-workspace.yml` will be included.
 

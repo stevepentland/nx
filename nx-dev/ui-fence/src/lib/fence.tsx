@@ -4,6 +4,7 @@ import {
   ClipboardDocumentIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline';
+import cx from 'classnames';
 import { JSX, ReactNode, useEffect, useState } from 'react';
 // @ts-ignore
 import { CopyToClipboard } from 'react-copy-to-clipboard';
@@ -28,21 +29,33 @@ function resolveLanguage(lang: string) {
 function CodeWrapper(options: {
   fileName: string;
   command: string;
+  title: string;
   path: string;
   language: string;
+  isWithinTab?: boolean;
   children: string; // intentionally typed as such
 }): ({ children }: { children: ReactNode }) => JSX.Element {
   return ({ children }: { children: ReactNode }) =>
     options.language === 'shell' ? (
-      <TerminalOutput command={options.children} path="" content={null} />
+      <TerminalOutput
+        command={options.children}
+        path=""
+        title={options.title}
+        content={null}
+      />
     ) : options.command ? (
       <TerminalOutput
         content={children}
         command={options.command}
         path={options.path}
+        title={options.title}
       />
     ) : (
-      <CodeOutput content={children} fileName={options.fileName} />
+      <CodeOutput
+        content={children}
+        fileName={options.fileName}
+        isWithinTab={options.isWithinTab}
+      />
     );
 }
 
@@ -75,6 +88,7 @@ function processHighlightLines(highlightLines: any): number[] {
 export interface FenceProps {
   children: string;
   command: string;
+  title: string;
   path: string;
   fileName: string;
   highlightLines: number[];
@@ -84,11 +98,13 @@ export interface FenceProps {
   skipRescope?: boolean;
   selectedLineGroup?: string;
   onLineGroupSelectionChange?: (selection: string) => void;
+  isWithinTab?: boolean;
 }
 
 export function Fence({
   children,
   command,
+  title,
   path,
   fileName,
   lineGroups,
@@ -98,6 +114,7 @@ export function Fence({
   selectedLineGroup,
   skipRescope,
   onLineGroupSelectionChange,
+  isWithinTab,
 }: FenceProps) {
   if (highlightLines) {
     highlightLines = processHighlightLines(highlightLines);
@@ -159,7 +176,12 @@ export function Fence({
   }
 
   return (
-    <div className="code-block group relative w-full">
+    <div
+      className={cx(
+        'code-block group relative',
+        isWithinTab ? '-ml-4 -mr-4 w-[calc(100%+2rem)]' : 'w-auto'
+      )}
+    >
       <div>
         <div className="absolute right-0 top-0 z-10 flex">
           {enableCopy && enableCopy === true && (
@@ -173,7 +195,7 @@ export function Fence({
                 type="button"
                 className={
                   'not-prose flex border border-slate-200 bg-slate-50/50 p-2 opacity-0 transition-opacity group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800/60' +
-                  (highlightOptions && highlightOptions[0]
+                  ((highlightOptions && highlightOptions[0]) || isWithinTab
                     ? ''
                     : ' rounded-tr-lg')
                 }
@@ -188,7 +210,7 @@ export function Fence({
           )}
           {highlightOptions && highlightOptions[0] && (
             <Selector
-              className="rounded-tr-lg"
+              className={cx(isWithinTab ? '' : 'rounded-tr-lg')}
               items={highlightOptions}
               selected={selectedOption}
               onChange={highlightChange}
@@ -206,9 +228,11 @@ export function Fence({
           PreTag={CodeWrapper({
             fileName,
             command,
+            title,
             path,
             language,
             children,
+            isWithinTab,
           })}
         />
       </div>

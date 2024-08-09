@@ -14,7 +14,7 @@ import { VitePreviewServerExecutorOptions } from '../executors/preview-server/sc
 import { VitestExecutorOptions } from '../executors/test/schema';
 import { ViteConfigurationGeneratorSchema } from '../generators/configuration/schema';
 import { ensureViteConfigIsCorrect } from './vite-config-edit-utils';
-import { addBuildTargetDefaults } from '@nx/devkit/src/generators/add-build-target-defaults';
+import { addBuildTargetDefaults } from '@nx/devkit/src/generators/target-defaults-utils';
 
 export type Target = 'build' | 'serve' | 'test' | 'preview';
 export type TargetFlags = Partial<Record<Target, boolean>>;
@@ -204,6 +204,7 @@ export function addPreviewTarget(
 
   // Adds a preview target.
   project.targets.preview = {
+    dependsOn: ['build'],
     executor: '@nx/vite:preview-server',
     defaultConfiguration: 'development',
     options: previewOptions,
@@ -718,14 +719,6 @@ function handleViteConfigFileExists(
 
   const testOptionObject = {
     globals: true,
-    cache: {
-      dir: normalizedJoinPaths(
-        offsetFromRoot,
-        'node_modules',
-        '.vitest',
-        projectRoot === '.' ? options.project : projectRoot
-      ),
-    },
     environment: options.testEnvironment ?? 'jsdom',
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     reporters: ['default'],

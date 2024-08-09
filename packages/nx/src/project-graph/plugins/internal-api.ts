@@ -28,6 +28,8 @@ import {
   AggregateCreateNodesError,
   isAggregateCreateNodesError,
 } from '../error-types';
+import { IS_WASM } from '../../native';
+import { platform } from 'os';
 
 export class LoadedNxPlugin {
   readonly name: string;
@@ -144,16 +146,32 @@ export const nxPluginCache: Map<
   [Promise<LoadedNxPlugin>, () => void]
 > = new Map();
 
+function isIsolationEnabled() {
+  // Explicitly enabled, regardless of further conditions
+  if (process.env.NX_ISOLATE_PLUGINS === 'true') {
+    return true;
+  }
+  if (
+    // Explicitly disabled
+    process.env.NX_ISOLATE_PLUGINS === 'false' ||
+    // Isolation is disabled on WASM builds currently.
+    IS_WASM
+  ) {
+    return false;
+  }
+  // Default value
+  return true;
+}
+
 export async function loadNxPlugins(
   plugins: PluginConfiguration[],
   root = workspaceRoot
 ): Promise<readonly [LoadedNxPlugin[], () => void]> {
   performance.mark('loadNxPlugins:start');
 
-  const loadingMethod =
-    process.env.NX_ISOLATE_PLUGINS !== 'false'
-      ? loadNxPluginInIsolation
-      : loadNxPlugin;
+  const loadingMethod = isIsolationEnabled()
+    ? loadNxPluginInIsolation
+    : loadNxPlugin;
 
   plugins = await normalizePlugins(plugins, root);
 
@@ -192,12 +210,6 @@ async function normalizePlugins(plugins: PluginConfiguration[], root: string) {
   plugins ??= [];
 
   return [
-    // This plugin adds targets that we want to be able to overwrite
-    // in any user-land plugin, so it has to be first :).
-    join(
-      __dirname,
-      '../../plugins/project-json/build-nodes/package-json-next-to-project-json'
-    ),
     ...plugins,
     // Most of the nx core node plugins go on the end, s.t. it overwrites any other plugins
     ...(await getDefaultPlugins(root)),
@@ -210,7 +222,7 @@ export async function getDefaultPlugins(root: string) {
     ...(shouldMergeAngularProjects(root, false)
       ? [join(__dirname, '../../adapter/angular-json')]
       : []),
-    join(__dirname, '../../plugins/package-json-workspaces'),
+    join(__dirname, '../../plugins/package-json'),
     join(__dirname, '../../plugins/project-json/build-nodes/project-json'),
   ];
 }

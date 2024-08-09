@@ -30,7 +30,8 @@ import { hashObject } from 'nx/src/hasher/file-hasher';
 const cacheableTaskType = new Set(['Build', 'Verification']);
 const dependsOnMap = {
   build: ['^build', 'classes'],
-  test: ['classes'],
+  testClasses: ['classes'],
+  test: ['testClasses'],
   classes: ['^classes'],
 };
 
@@ -275,6 +276,14 @@ async function createGradleTargets(
       dependsOn: dependsOnMap[task.name],
       metadata: {
         technologies: ['gradle'],
+        help: {
+          command: `${getGradleExecFile()} help --task ${taskCommandToRun}`,
+          example: {
+            options: {
+              args: ['--rerun'],
+            },
+          },
+        },
       },
       ...(outputs && outputs.length ? { outputs } : {}),
     };
@@ -335,6 +344,14 @@ function getTestCiTargets(
       metadata: {
         technologies: ['gradle'],
         description: `Runs Gradle test ${testFile} in CI`,
+        help: {
+          command: `${getGradleExecFile()} help --task ${taskCommandToRun}`,
+          example: {
+            options: {
+              args: ['--rerun'],
+            },
+          },
+        },
       },
       ...(outputs && outputs.length > 0 ? { outputs } : {}),
     };
@@ -356,6 +373,14 @@ function getTestCiTargets(
       technologies: ['gradle'],
       description: 'Runs Gradle Tests in CI',
       nonAtomizedTarget: testTargetName,
+      help: {
+        command: `${getGradleExecFile()} help --task ${taskCommandToRun}`,
+        example: {
+          options: {
+            args: ['--rerun'],
+          },
+        },
+      },
     },
   };
   targetGroups[targetGroupName].push(ciTargetName);

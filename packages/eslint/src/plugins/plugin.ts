@@ -13,7 +13,7 @@ import {
 } from '@nx/devkit';
 import { calculateHashForCreateNodes } from '@nx/devkit/src/utils/calculate-hash-for-create-nodes';
 import { existsSync } from 'node:fs';
-import { basename, dirname, join, normalize, sep } from 'node:path';
+import { basename, dirname, join, normalize, sep } from 'node:path/posix';
 import { hashObject } from 'nx/src/hasher/file-hasher';
 import { workspaceDataDirectory } from 'nx/src/utils/cache-directory';
 import { combineGlobPatterns } from 'nx/src/utils/globs';
@@ -514,11 +514,11 @@ function buildEslintTargets(
 
 function normalizeOptions(options: EslintPluginOptions): EslintPluginOptions {
   const normalizedOptions: EslintPluginOptions = {
-    targetName: options.targetName ?? 'lint',
+    targetName: options?.targetName ?? 'lint',
   };
 
   // Normalize user input for extensions (strip leading . characters)
-  if (Array.isArray(options.extensions)) {
+  if (Array.isArray(options?.extensions)) {
     normalizedOptions.extensions = options.extensions.map((f) =>
       f.replace(/^\.+/, '')
     );

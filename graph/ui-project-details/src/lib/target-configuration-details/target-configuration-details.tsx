@@ -74,9 +74,9 @@ export default function TargetConfigurationDetails({
     getDisplayHeaderFromTargetConfiguration(targetConfiguration);
   const configurations = targetConfiguration.configurations;
 
-  const shouldRenderOptions =
+  const shouldRenderOptions: boolean =
     options &&
-    (typeof options === 'object' ? Object.keys(options).length : true);
+    (typeof options === 'object' ? Object.keys(options).length > 0 : true);
 
   const shouldRenderConfigurations =
     configurations &&
@@ -103,6 +103,25 @@ export default function TargetConfigurationDetails({
       {/* body */}
       {!collapsed && (
         <div className="p-4 text-base">
+          {targetConfiguration.metadata?.description && (
+            <div className="group mb-4">
+              <h4 className="mb-4">
+                <span className="font-medium">Description</span>
+                <span className="mb-1 ml-2 hidden group-hover:inline">
+                  <CopyToClipboardButton
+                    text={`"metadata": ${JSON.stringify({
+                      description: targetConfiguration.metadata?.description,
+                    })}`}
+                    tooltipText="Copy Description"
+                  />
+                </span>
+              </h4>
+              <p className="pl-5">
+                {targetConfiguration.metadata?.description}
+              </p>
+            </div>
+          )}
+
           <div className="group mb-4">
             <h4 className="mb-4">
               <TargetExecutorTitle {...displayHeader} />
@@ -137,7 +156,7 @@ export default function TargetConfigurationDetails({
             </div>
           )}
 
-          {shouldRenderOptions ? (
+          {shouldRenderOptions || targetConfiguration.metadata?.help ? (
             <>
               <h4 className="mb-4">
                 <Tooltip
@@ -149,32 +168,34 @@ export default function TargetConfigurationDetails({
                   </span>
                 </Tooltip>
               </h4>
-              <div className="mb-4">
-                <FadingCollapsible>
-                  <JsonCodeBlock
-                    data={options}
-                    copyTooltipText="Copy Options"
-                    renderSource={(propertyName: string) => (
-                      <TargetSourceInfo
-                        className="flex min-w-0 pl-4"
-                        propertyKey={`targets.${targetName}.options.${propertyName}`}
-                        sourceMap={sourceMap}
-                      />
-                    )}
+              {shouldRenderOptions ? (
+                <div className="mb-4">
+                  <FadingCollapsible>
+                    <JsonCodeBlock
+                      data={options}
+                      copyTooltipText="Copy Options"
+                      renderSource={(propertyName: string) => (
+                        <TargetSourceInfo
+                          className="flex min-w-0 pl-4"
+                          propertyKey={`targets.${targetName}.options.${propertyName}`}
+                          sourceMap={sourceMap}
+                        />
+                      )}
+                    />
+                  </FadingCollapsible>
+                </div>
+              ) : null}
+              {targetConfiguration.metadata?.help && (
+                <div className="mb-4">
+                  <ShowOptionsHelp
+                    targetConfiguration={targetConfiguration}
+                    projectName={projectName}
+                    targetName={targetName}
                   />
-                </FadingCollapsible>
-              </div>
-              <div className="mb-4">
-                <ShowOptionsHelp
-                  targetConfiguration={targetConfiguration}
-                  projectName={projectName}
-                  targetName={targetName}
-                />
-              </div>
+                </div>
+              )}
             </>
-          ) : (
-            ''
-          )}
+          ) : null}
 
           {targetConfiguration.inputs && (
             <div className="group">
@@ -328,9 +349,31 @@ export default function TargetConfigurationDetails({
                 />
               </FadingCollapsible>
             </>
-          ) : (
-            ''
-          )}
+          ) : null}
+
+          {targetConfiguration.parallelism === false ? (
+            <div className="group mb-4">
+              <h4 className="mb-4">
+                <Tooltip
+                  openAction="hover"
+                  content={(<PropertyInfoTooltip type="parallelism" />) as any}
+                >
+                  <span className="font-medium">
+                    <TooltipTriggerText>Parallelism</TooltipTriggerText>
+                  </span>
+                </Tooltip>
+              </h4>
+              <div className="group/line overflow-hidden whitespace-nowrap pl-5">
+                <TargetConfigurationProperty data={{ paralelism: false }}>
+                  <TargetSourceInfo
+                    className="min-w-0 flex-1 pl-4 opacity-0 transition-opacity duration-150 ease-in-out group-hover/line:opacity-100"
+                    propertyKey={`targets.${targetName}.parallelism`}
+                    sourceMap={sourceMap}
+                  />
+                </TargetConfigurationProperty>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

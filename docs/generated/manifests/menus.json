@@ -1091,14 +1091,6 @@
                 "disableCollapsible": false
               },
               {
-                "name": "Change Cache Location",
-                "path": "/recipes/running-tasks/change-cache-location",
-                "id": "change-cache-location",
-                "isExternal": false,
-                "children": [],
-                "disableCollapsible": false
-              },
-              {
                 "name": "Run Custom Commands",
                 "path": "/recipes/running-tasks/run-commands-executor",
                 "id": "run-commands-executor",
@@ -1142,6 +1134,22 @@
                 "name": "Reduce Repetitive Configuration",
                 "path": "/recipes/running-tasks/reduce-repetitive-configuration",
                 "id": "reduce-repetitive-configuration",
+                "isExternal": false,
+                "children": [],
+                "disableCollapsible": false
+              },
+              {
+                "name": "Change Cache Location",
+                "path": "/recipes/running-tasks/change-cache-location",
+                "id": "change-cache-location",
+                "isExternal": false,
+                "children": [],
+                "disableCollapsible": false
+              },
+              {
+                "name": "Skip Task Caching",
+                "path": "/recipes/running-tasks/skipping-cache",
+                "id": "skipping-cache",
                 "isExternal": false,
                 "children": [],
                 "disableCollapsible": false
@@ -1923,6 +1931,14 @@
                 "disableCollapsible": false
               },
               {
+                "name": "Customize Conventional Commit Types",
+                "path": "/recipes/nx-release/customize-conventional-commit-types",
+                "id": "customize-conventional-commit-types",
+                "isExternal": false,
+                "children": [],
+                "disableCollapsible": false
+              },
+              {
                 "name": "Configure Custom Registries",
                 "path": "/recipes/nx-release/configure-custom-registries",
                 "id": "configure-custom-registries",
@@ -1958,14 +1974,6 @@
                 "name": "Update Your Local Registry Setup to use Nx Release",
                 "path": "/recipes/nx-release/update-local-registry-setup",
                 "id": "update-local-registry-setup",
-                "isExternal": false,
-                "children": [],
-                "disableCollapsible": false
-              },
-              {
-                "name": "Customize Conventional Commit Types",
-                "path": "/recipes/nx-release/customize-conventional-commit-types",
-                "id": "customize-conventional-commit-types",
                 "isExternal": false,
                 "children": [],
                 "disableCollapsible": false
@@ -2081,14 +2089,6 @@
             "disableCollapsible": false
           },
           {
-            "name": "Change Cache Location",
-            "path": "/recipes/running-tasks/change-cache-location",
-            "id": "change-cache-location",
-            "isExternal": false,
-            "children": [],
-            "disableCollapsible": false
-          },
-          {
             "name": "Run Custom Commands",
             "path": "/recipes/running-tasks/run-commands-executor",
             "id": "run-commands-executor",
@@ -2135,6 +2135,22 @@
             "isExternal": false,
             "children": [],
             "disableCollapsible": false
+          },
+          {
+            "name": "Change Cache Location",
+            "path": "/recipes/running-tasks/change-cache-location",
+            "id": "change-cache-location",
+            "isExternal": false,
+            "children": [],
+            "disableCollapsible": false
+          },
+          {
+            "name": "Skip Task Caching",
+            "path": "/recipes/running-tasks/skipping-cache",
+            "id": "skipping-cache",
+            "isExternal": false,
+            "children": [],
+            "disableCollapsible": false
           }
         ],
         "disableCollapsible": false
@@ -2159,14 +2175,6 @@
         "name": "Define a Task Pipeline",
         "path": "/recipes/running-tasks/defining-task-pipeline",
         "id": "defining-task-pipeline",
-        "isExternal": false,
-        "children": [],
-        "disableCollapsible": false
-      },
-      {
-        "name": "Change Cache Location",
-        "path": "/recipes/running-tasks/change-cache-location",
-        "id": "change-cache-location",
         "isExternal": false,
         "children": [],
         "disableCollapsible": false
@@ -2215,6 +2223,22 @@
         "name": "Reduce Repetitive Configuration",
         "path": "/recipes/running-tasks/reduce-repetitive-configuration",
         "id": "reduce-repetitive-configuration",
+        "isExternal": false,
+        "children": [],
+        "disableCollapsible": false
+      },
+      {
+        "name": "Change Cache Location",
+        "path": "/recipes/running-tasks/change-cache-location",
+        "id": "change-cache-location",
+        "isExternal": false,
+        "children": [],
+        "disableCollapsible": false
+      },
+      {
+        "name": "Skip Task Caching",
+        "path": "/recipes/running-tasks/skipping-cache",
+        "id": "skipping-cache",
         "isExternal": false,
         "children": [],
         "disableCollapsible": false
@@ -3626,6 +3650,14 @@
             "disableCollapsible": false
           },
           {
+            "name": "Customize Conventional Commit Types",
+            "path": "/recipes/nx-release/customize-conventional-commit-types",
+            "id": "customize-conventional-commit-types",
+            "isExternal": false,
+            "children": [],
+            "disableCollapsible": false
+          },
+          {
             "name": "Configure Custom Registries",
             "path": "/recipes/nx-release/configure-custom-registries",
             "id": "configure-custom-registries",
@@ -3661,14 +3693,6 @@
             "name": "Update Your Local Registry Setup to use Nx Release",
             "path": "/recipes/nx-release/update-local-registry-setup",
             "id": "update-local-registry-setup",
-            "isExternal": false,
-            "children": [],
-            "disableCollapsible": false
-          },
-          {
-            "name": "Customize Conventional Commit Types",
-            "path": "/recipes/nx-release/customize-conventional-commit-types",
-            "id": "customize-conventional-commit-types",
             "isExternal": false,
             "children": [],
             "disableCollapsible": false
@@ -3717,6 +3741,14 @@
         "disableCollapsible": false
       },
       {
+        "name": "Customize Conventional Commit Types",
+        "path": "/recipes/nx-release/customize-conventional-commit-types",
+        "id": "customize-conventional-commit-types",
+        "isExternal": false,
+        "children": [],
+        "disableCollapsible": false
+      },
+      {
         "name": "Configure Custom Registries",
         "path": "/recipes/nx-release/configure-custom-registries",
         "id": "configure-custom-registries",
@@ -3752,14 +3784,6 @@
         "name": "Update Your Local Registry Setup to use Nx Release",
         "path": "/recipes/nx-release/update-local-registry-setup",
         "id": "update-local-registry-setup",
-        "isExternal": false,
-        "children": [],
-        "disableCollapsible": false
-      },
-      {
-        "name": "Customize Conventional Commit Types",
-        "path": "/recipes/nx-release/customize-conventional-commit-types",
-        "id": "customize-conventional-commit-types",
         "isExternal": false,
         "children": [],
         "disableCollapsible": false
@@ -5170,9 +5194,9 @@
             "disableCollapsible": false
           },
           {
-            "name": "Connect Nx Cloud",
-            "path": "/ci/intro/connect-to-cloud",
-            "id": "connect-to-cloud",
+            "name": "Connect to Nx Cloud",
+            "path": "/ci/intro/connect-to-nx-cloud",
+            "id": "connect-to-nx-cloud",
             "isExternal": false,
             "children": [],
             "disableCollapsible": false
@@ -5222,9 +5246,9 @@
         "disableCollapsible": false
       },
       {
-        "name": "Connect Nx Cloud",
-        "path": "/ci/intro/connect-to-cloud",
-        "id": "connect-to-cloud",
+        "name": "Connect to Nx Cloud",
+        "path": "/ci/intro/connect-to-nx-cloud",
+        "id": "connect-to-nx-cloud",
         "isExternal": false,
         "children": [],
         "disableCollapsible": false
@@ -5301,6 +5325,14 @@
             "disableCollapsible": false
           },
           {
+            "name": "Nx Cloud AI",
+            "path": "/ci/features/nx-cloud-ai",
+            "id": "nx-cloud-ai",
+            "isExternal": false,
+            "children": [],
+            "disableCollapsible": false
+          },
+          {
             "name": "Dynamically Allocate Agents",
             "path": "/ci/features/dynamic-agents",
             "id": "dynamic-agents",
@@ -5347,6 +5379,14 @@
         "name": "Distribute Task Execution (Nx Agents)",
         "path": "/ci/features/distribute-task-execution",
         "id": "distribute-task-execution",
+        "isExternal": false,
+        "children": [],
+        "disableCollapsible": false
+      },
+      {
+        "name": "Nx Cloud AI",
+        "path": "/ci/features/nx-cloud-ai",
+        "id": "nx-cloud-ai",
         "isExternal": false,
         "children": [],
         "disableCollapsible": false
@@ -5657,14 +5697,6 @@
                     "name": "Authenticate via SAML",
                     "path": "/ci/recipes/enterprise/on-premise/auth-saml",
                     "id": "auth-saml",
-                    "isExternal": false,
-                    "children": [],
-                    "disableCollapsible": false
-                  },
-                  {
-                    "name": "Authenticate via SAML on Managed Version",
-                    "path": "/ci/recipes/enterprise/on-premise/auth-saml-managed",
-                    "id": "auth-saml-managed",
                     "isExternal": false,
                     "children": [],
                     "disableCollapsible": false
@@ -6088,14 +6120,6 @@
                 "disableCollapsible": false
               },
               {
-                "name": "Authenticate via SAML on Managed Version",
-                "path": "/ci/recipes/enterprise/on-premise/auth-saml-managed",
-                "id": "auth-saml-managed",
-                "isExternal": false,
-                "children": [],
-                "disableCollapsible": false
-              },
-              {
                 "name": "Advanced Configuration",
                 "path": "/ci/recipes/enterprise/on-premise/advanced-config",
                 "id": "advanced-config",
@@ -6245,14 +6269,6 @@
             "disableCollapsible": false
           },
           {
-            "name": "Authenticate via SAML on Managed Version",
-            "path": "/ci/recipes/enterprise/on-premise/auth-saml-managed",
-            "id": "auth-saml-managed",
-            "isExternal": false,
-            "children": [],
-            "disableCollapsible": false
-          },
-          {
             "name": "Advanced Configuration",
             "path": "/ci/recipes/enterprise/on-premise/advanced-config",
             "id": "advanced-config",
@@ -6331,14 +6347,6 @@
         "name": "Authenticate via SAML",
         "path": "/ci/recipes/enterprise/on-premise/auth-saml",
         "id": "auth-saml",
-        "isExternal": false,
-        "children": [],
-        "disableCollapsible": false
-      },
-      {
-        "name": "Authenticate via SAML on Managed Version",
-        "path": "/ci/recipes/enterprise/on-premise/auth-saml-managed",
-        "id": "auth-saml-managed",
         "isExternal": false,
         "children": [],
         "disableCollapsible": false
@@ -6623,6 +6631,14 @@
             "isExternal": false,
             "children": [],
             "disableCollapsible": false
+          },
+          {
+            "name": "Explain With AI",
+            "path": "/ci/troubleshooting/explain-with-ai",
+            "id": "explain-with-ai",
+            "isExternal": false,
+            "children": [],
+            "disableCollapsible": false
           }
         ],
         "disableCollapsible": false
@@ -6631,6 +6647,14 @@
         "name": "CI Execution Failed",
         "path": "/ci/troubleshooting/ci-execution-failed",
         "id": "ci-execution-failed",
+        "isExternal": false,
+        "children": [],
+        "disableCollapsible": false
+      },
+      {
+        "name": "Explain With AI",
+        "path": "/ci/troubleshooting/explain-with-ai",
+        "id": "explain-with-ai",
         "isExternal": false,
         "children": [],
         "disableCollapsible": false
@@ -7227,6 +7251,14 @@
                 "children": [],
                 "isExternal": false,
                 "disableCollapsible": false
+              },
+              {
+                "id": "convert-to-inferred",
+                "path": "/nx-api/detox/generators/convert-to-inferred",
+                "name": "convert-to-inferred",
+                "children": [],
+                "isExternal": false,
+                "disableCollapsible": false
               }
             ],
             "isExternal": false,
@@ -7632,6 +7664,14 @@
                 "id": "component",
                 "path": "/nx-api/expo/generators/component",
                 "name": "component",
+                "children": [],
+                "isExternal": false,
+                "disableCollapsible": false
+              },
+              {
+                "id": "convert-to-inferred",
+                "path": "/nx-api/expo/generators/convert-to-inferred",
+                "name": "convert-to-inferred",
                 "children": [],
                 "isExternal": false,
                 "disableCollapsible": false
@@ -9206,6 +9246,14 @@
                 "id": "web-configuration",
                 "path": "/nx-api/react-native/generators/web-configuration",
                 "name": "web-configuration",
+                "children": [],
+                "isExternal": false,
+                "disableCollapsible": false
+              },
+              {
+                "id": "convert-to-inferred",
+                "path": "/nx-api/react-native/generators/convert-to-inferred",
+                "name": "convert-to-inferred",
                 "children": [],
                 "isExternal": false,
                 "disableCollapsible": false

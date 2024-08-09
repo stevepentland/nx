@@ -32,6 +32,16 @@ describe('project-configuration-utils', () => {
           key: 'default-value-for-targetname',
         },
       },
+      'e2e-ci--*': {
+        options: {
+          key: 'default-value-for-e2e-ci',
+        },
+      },
+      'e2e-ci--file-*': {
+        options: {
+          key: 'default-value-for-e2e-ci-file',
+        },
+      },
     };
 
     it('should prefer executor key', () => {
@@ -59,6 +69,26 @@ describe('project-configuration-utils', () => {
           'other-executor'
         )
       ).toBeNull();
+    });
+
+    it('should return longest matching target', () => {
+      expect(
+        // This matches both 'e2e-ci--*' and 'e2e-ci--file-*', we expect the first match to be returned.
+        readTargetDefaultsForTarget('e2e-ci--file-foo', targetDefaults, null)
+          .options['key']
+      ).toEqual('default-value-for-e2e-ci-file');
+    });
+
+    it('should return longest matching target even if executor is passed', () => {
+      expect(
+        // This uses an executor which does not have settings in target defaults
+        // thus the target name pattern target defaults are used
+        readTargetDefaultsForTarget(
+          'e2e-ci--file-foo',
+          targetDefaults,
+          'other-executor'
+        ).options['key']
+      ).toEqual('default-value-for-e2e-ci-file');
     });
 
     it('should not merge top level properties for incompatible targets', () => {
@@ -1502,8 +1532,44 @@ describe('project-configuration-utils', () => {
           "options": {
             "command": "echo libs/project",
           },
+          "parallelism": true,
         }
       `);
+    });
+    it('should not mutate the target', () => {
+      const config = {
+        name: 'project',
+        root: 'libs/project',
+        targets: {
+          foo: {
+            executor: 'nx:noop',
+            options: {
+              config: '{projectRoot}/config.json',
+            },
+            configurations: {
+              prod: {
+                config: '{projectRoot}/config.json',
+              },
+            },
+          },
+          bar: {
+            command: 'echo {projectRoot}',
+            options: {
+              config: '{projectRoot}/config.json',
+            },
+            configurations: {
+              prod: {
+                config: '{projectRoot}/config.json',
+              },
+            },
+          },
+        },
+      };
+      const originalConfig = JSON.stringify(config, null, 2);
+
+      normalizeTarget(config.targets.foo, config);
+      normalizeTarget(config.targets.bar, config);
+      expect(JSON.stringify(config, null, 2)).toEqual(originalConfig);
     });
   });
 
@@ -1658,6 +1724,7 @@ describe('project-configuration-utils', () => {
           "options": {
             "command": "echo a @ libs/a",
           },
+          "parallelism": true,
         }
       `);
     });
@@ -1810,6 +1877,46 @@ describe('project-configuration-utils', () => {
       ]);
       // other source map entries should be left unchanged
       expect(sourceMap['targets']).toEqual(['dummy', 'dummy.ts']);
+    });
+
+    it('should not overwrite dependsOn', () => {
+      const sourceMap: Record<string, SourceInformation> = {
+        targets: ['dummy', 'dummy.ts'],
+        'targets.build': ['dummy', 'dummy.ts'],
+        'targets.build.options': ['dummy', 'dummy.ts'],
+        'targets.build.options.command': ['dummy', 'dummy.ts'],
+        'targets.build.options.cwd': ['project.json', 'nx/project-json'],
+        'targets.build.dependsOn': ['project.json', 'nx/project-json'],
+      };
+      const result = mergeTargetDefaultWithTargetDefinition(
+        'build',
+        {
+          name: 'myapp',
+          root: 'apps/myapp',
+          targets: {
+            build: {
+              executor: 'nx:run-commands',
+              options: {
+                command: 'echo',
+                cwd: '{workspaceRoot}',
+              },
+              dependsOn: [],
+            },
+          },
+        },
+        {
+          options: {
+            command: 'tsc',
+            cwd: 'apps/myapp',
+          },
+          dependsOn: ['^build'],
+        },
+        sourceMap
+      );
+
+      // Command was defined by a core plugin so it should
+      // not be replaced by target default
+      expect(result.dependsOn).toEqual([]);
     });
   });
 });

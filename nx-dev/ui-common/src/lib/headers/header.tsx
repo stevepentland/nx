@@ -1,7 +1,6 @@
 'use client';
 import { Dialog, Disclosure, Popover, Transition } from '@headlessui/react';
 import {
-  ArrowUpRightIcon,
   Bars4Icon,
   ChevronDownIcon,
   XMarkIcon,
@@ -11,6 +10,7 @@ import Link from 'next/link';
 import { Fragment, useEffect, useState } from 'react';
 import { ButtonLink } from '../button';
 import {
+  companyItems,
   eventItems,
   featuresItems,
   learnItems,
@@ -18,13 +18,11 @@ import {
   resourceMenuItems,
   solutionsMenuItems,
 } from './menu-items';
-import { NxIcon } from '../nx-icon';
-import { GitHubIcon } from '../github-icon';
 import { MobileMenuItem } from './mobile-menu-item';
 import { SectionsMenu } from './sections-menu';
 import { TwoColumnsMenu } from './two-columns-menu';
 import { AlgoliaSearch } from '@nx/nx-dev/feature-search';
-import { NxCloudIcon } from '../nx-cloud-icon';
+import { GitHubIcon, NxCloudAnimatedIcon, NxIcon } from '@nx/nx-dev/ui-icons';
 
 export function Header(): JSX.Element {
   let [isOpen, setIsOpen] = useState(false);
@@ -45,9 +43,16 @@ export function Header(): JSX.Element {
   }, []);
 
   return (
-    <div className="relative inset-x-0 top-0 z-[5] flex print:hidden">
+    <div className="fixed inset-x-0 top-0 isolate z-[5] flex px-4 print:hidden">
+      <div
+        className="absolute inset-x-0 top-0 mx-auto h-20 max-w-7xl backdrop-blur"
+        style={{
+          maskImage:
+            'linear-gradient(to bottom, #000000 20%, transparent calc(100% - 20%))',
+        }}
+      />
       {/*DESKTOP*/}
-      <div className="mx-auto hidden w-full max-w-7xl items-center justify-between space-x-10 p-4 px-8 lg:flex">
+      <div className="mx-auto mt-2 hidden w-full max-w-7xl items-center justify-between space-x-10 rounded-xl border border-slate-200/40 bg-white/70 px-4 py-2 shadow-lg backdrop-blur-xl backdrop-saturate-150 lg:flex dark:border-slate-800/60 dark:bg-slate-950/40">
         {/*PRIMARY NAVIGATION*/}
         <div className="flex flex-shrink-0 text-sm">
           {/*LOGO*/}
@@ -169,15 +174,14 @@ export function Header(): JSX.Element {
             >
               Blog
             </Link>
-            <a
-              href="https://nx.app/pricing"
+            <Link
+              href="/pricing"
               title="Nx Cloud"
-              target="_blank"
               className="hidden gap-2 px-3 py-2 font-medium leading-tight hover:text-blue-500 md:inline-flex dark:text-slate-200 dark:hover:text-sky-500"
+              prefetch={false}
             >
               CI Pricing
-              <ArrowUpRightIcon className="h-2 w-2 align-super" />
-            </a>
+            </Link>
             {/*RESOURCES*/}
             <Popover className="relative">
               {({ open }) => (
@@ -241,8 +245,8 @@ export function Header(): JSX.Element {
               target="_blank"
               title="Log in to your Nx Cloud Account"
             >
-              <NxCloudIcon className="h-4 w-4" aria-hidden="true" />
-              <span>Go to App</span>
+              <NxCloudAnimatedIcon className="h-4 w-4" aria-hidden="true" />
+              <span>Go to app</span>
             </ButtonLink>
             <a
               title="Nx is open source, check the code on GitHub"
@@ -362,7 +366,7 @@ export function Header(): JSX.Element {
                           title="Log in to your Nx Cloud Account"
                           className="w-full"
                         >
-                          Go to App
+                          Go to app
                         </ButtonLink>
 
                         <div className="mt-4 divide-y divide-slate-200 border-b border-slate-200 dark:divide-slate-800 dark:border-slate-800">
@@ -453,15 +457,14 @@ export function Header(): JSX.Element {
                           >
                             Blog
                           </Link>
-                          <a
-                            href="https://nx.app/pricing"
+                          <Link
+                            href="/pricing"
                             title="Nx Cloud"
-                            target="_blank"
                             className="flex w-full gap-2 py-4 font-medium leading-tight hover:text-blue-500 dark:text-slate-200 dark:hover:text-sky-500"
+                            prefetch={false}
                           >
                             CI Pricing
-                            <ArrowUpRightIcon className="h-2 w-2 align-super" />
-                          </a>
+                          </Link>
                           {/*RESOURCES*/}
                           <Disclosure as="div">
                             {({ open }) => (
@@ -496,6 +499,12 @@ export function Header(): JSX.Element {
                                     />
                                   ))}
                                   {eventItems.map((item) => (
+                                    <MobileMenuItem
+                                      key={item.name}
+                                      item={item}
+                                    />
+                                  ))}
+                                  {companyItems.map((item) => (
                                     <MobileMenuItem
                                       key={item.name}
                                       item={item}

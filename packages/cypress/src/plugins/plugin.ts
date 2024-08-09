@@ -211,6 +211,7 @@ async function buildCypressTargets(
       cache: true,
       inputs: getInputs(namedInputs),
       outputs: getOutputs(projectRoot, cypressConfig, 'e2e'),
+      parallelism: false,
       metadata: {
         technologies: ['cypress'],
         description: 'Runs Cypress Tests',
@@ -256,6 +257,8 @@ async function buildCypressTargets(
         excludeSpecPatterns
       );
 
+      const ciBaseUrl = pluginPresetOptions?.ciBaseUrl;
+
       const dependsOn: TargetConfiguration['dependsOn'] = [];
       const outputs = getOutputs(projectRoot, cypressConfig, 'e2e');
       const inputs = getInputs(namedInputs);
@@ -272,10 +275,13 @@ async function buildCypressTargets(
           outputs,
           inputs,
           cache: true,
-          command: `cypress run --env webServerCommand="${ciWebServerCommand}" --spec ${relativeSpecFilePath}`,
+          command: `cypress run --env webServerCommand="${ciWebServerCommand}" --spec ${relativeSpecFilePath}${
+            ciBaseUrl ? ` --config='{"baseUrl": "${ciBaseUrl}"}'` : ''
+          }`,
           options: {
             cwd: projectRoot,
           },
+          parallelism: false,
           metadata: {
             technologies: ['cypress'],
             description: `Runs Cypress Tests in ${relativeSpecFilePath} in CI`,
@@ -300,6 +306,7 @@ async function buildCypressTargets(
         inputs,
         outputs,
         dependsOn,
+        parallelism: false,
         metadata: {
           technologies: ['cypress'],
           description: 'Runs Cypress Tests in CI',

@@ -381,11 +381,6 @@
                   "file": "shared/recipes/running-tasks/defining-task-pipeline"
                 },
                 {
-                  "name": "Change Cache Location",
-                  "id": "change-cache-location",
-                  "file": "shared/recipes/running-tasks/change-cache-location"
-                },
-                {
                   "name": "Run Custom Commands",
                   "id": "run-commands-executor",
                   "tags": ["run-tasks"],
@@ -420,6 +415,16 @@
                   "id": "reduce-repetitive-configuration",
                   "tags": [],
                   "file": "shared/recipes/running-tasks/reduce-repetitive-configuration"
+                },
+                {
+                  "name": "Change Cache Location",
+                  "id": "change-cache-location",
+                  "file": "shared/recipes/running-tasks/change-cache-location"
+                },
+                {
+                  "name": "Skip Task Caching",
+                  "id": "skipping-cache",
+                  "file": "shared/recipes/running-tasks/skipping-cache"
                 }
               ]
             },
@@ -999,6 +1004,12 @@
                   "file": "shared/recipes/nx-release/automatically-version-with-conventional-commits"
                 },
                 {
+                  "name": "Customize Conventional Commit Types",
+                  "id": "customize-conventional-commit-types",
+                  "tags": ["nx-release"],
+                  "file": "shared/recipes/nx-release/customize-conventional-commit-types"
+                },
+                {
                   "name": "Configure Custom Registries",
                   "id": "configure-custom-registries",
                   "tags": ["nx-release"],
@@ -1027,12 +1038,6 @@
                   "id": "update-local-registry-setup",
                   "tags": ["nx-release"],
                   "file": "shared/recipes/nx-release/update-local-registry-setup"
-                },
-                {
-                  "name": "Customize Conventional Commit Types",
-                  "id": "customize-conventional-commit-types",
-                  "tags": ["nx-release"],
-                  "file": "shared/recipes/nx-release/customize-conventional-commit-types"
                 },
                 {
                   "name": "Configure Changelog Format",
@@ -1570,8 +1575,8 @@
               "file": "nx-cloud/intro/why-nx-cloud"
             },
             {
-              "name": "Connect Nx Cloud",
-              "id": "connect-to-cloud",
+              "name": "Connect to Nx Cloud",
+              "id": "connect-to-nx-cloud",
               "file": "nx-cloud/intro/connect-to-cloud"
             },
             {
@@ -1617,6 +1622,12 @@
               "id": "distribute-task-execution",
               "description": "Learn how to efficiently distribute tasks across machines to take full advantage of parallelization. Nx Agents make this a trivial task.",
               "file": "shared/features/distribute-task-execution"
+            },
+            {
+              "name": "Nx Cloud AI",
+              "id": "nx-cloud-ai",
+              "description": "Learn how to enable AI features in Nx Cloud, and what features it enables",
+              "file": "nx-cloud/features/ai-features"
             },
             {
               "name": "Dynamically Allocate Agents",
@@ -1813,11 +1824,6 @@
                       "file": "nx-cloud/enterprise/on-premise/auth-saml"
                     },
                     {
-                      "name": "Authenticate via SAML on Managed Version",
-                      "id": "auth-saml-managed",
-                      "file": "nx-cloud/enterprise/on-premise/auth-saml-managed"
-                    },
-                    {
                       "name": "Advanced Configuration",
                       "id": "advanced-config",
                       "file": "nx-cloud/enterprise/on-premise/advanced-config"
@@ -1934,6 +1940,11 @@
               "name": "CI Execution Failed",
               "id": "ci-execution-failed",
               "file": "nx-cloud/troubleshooting/ci-execution-failed"
+            },
+            {
+              "name": "Explain With AI",
+              "id": "explain-with-ai",
+              "file": "nx-cloud/troubleshooting/explain-with-ai"
             }
           ]
         }

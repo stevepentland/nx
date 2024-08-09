@@ -10,12 +10,14 @@ import {
   withRunManyOptions,
 } from '../yargs-utils/shared-options';
 import { VersionData } from './utils/shared';
+import { readParallelFromArgsAndEnv } from '../../utils/command-line-utils';
 
 export interface NxReleaseArgs {
   groups?: string[];
   projects?: string[];
   dryRun?: boolean;
   verbose?: boolean;
+  printConfig?: boolean | 'debug';
 }
 
 interface GitCommitAndTagOptions {
@@ -120,6 +122,21 @@ export const yargsReleaseCommand: CommandModule<
         type: 'boolean',
         describe:
           'Prints additional information about the commands (e.g., stack traces)',
+      })
+      // NOTE: The camel case format is required for the coerce() function to be called correctly. It still supports --print-config casing.
+      .option('printConfig', {
+        type: 'string',
+        describe:
+          'Print the resolved nx release configuration that would be used for the current command and then exit',
+        coerce: (val: string) => {
+          if (val === '') {
+            return true;
+          }
+          if (val === 'false') {
+            return false;
+          }
+          return val;
+        },
       })
       .check((argv) => {
         if (argv.groups && argv.projects) {
@@ -355,27 +372,10 @@ const planCommand: CommandModule<NxReleaseArgs, PlanOptions> = {
 };
 
 function coerceParallelOption(args: any) {
-  if (args['parallel'] === 'false' || args['parallel'] === false) {
-    return {
-      ...args,
-      parallel: 1,
-    };
-  } else if (
-    args['parallel'] === 'true' ||
-    args['parallel'] === true ||
-    args['parallel'] === ''
-  ) {
-    return {
-      ...args,
-      parallel: Number(args['maxParallel'] || args['max-parallel'] || 3),
-    };
-  } else if (args['parallel'] !== undefined) {
-    return {
-      ...args,
-      parallel: Number(args['parallel']),
-    };
-  }
-  return args;
+  return {
+    ...args,
+    parallel: readParallelFromArgsAndEnv(args),
+  };
 }
 
 function withGitCommitAndGitTagOptions<T>(
