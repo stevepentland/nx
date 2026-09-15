@@ -1,18 +1,19 @@
-// The global jest setup (`scripts/unit-test-setup.js`) mocks
+// The global setup (`vitest.setup.mts`) mocks
 // `nx/src/project-graph/project-graph` to return an empty graph for every
 // test, but this suite is the one place that exercises the real
 // `buildProjectGraphAndSourceMapsWithoutDaemon` implementation, so opt out.
-jest.unmock('./project-graph');
+vi.unmock('./project-graph');
 
 import { buildProjectGraphAndSourceMapsWithoutDaemon } from './project-graph';
 import * as plugins from './plugins/get-plugins';
 
-jest.mock('../utils/workspace-context', () => {
+vi.mock('../utils/workspace-context', () => {
   return {
-    globWithWorkspaceContext: jest.fn().mockReturnValue(['file']),
+    refreshWorkspaceContext: vi.fn(),
+    globWithWorkspaceContext: vi.fn().mockReturnValue(['file']),
     // multiGlob returns one file list per glob group (string[][]).
-    multiGlobWithWorkspaceContext: jest.fn().mockReturnValue([['file']]),
-    getNxWorkspaceFilesFromContext: jest.fn().mockReturnValue({
+    multiGlobWithWorkspaceContext: vi.fn().mockReturnValue([['file']]),
+    getNxWorkspaceFilesFromContext: vi.fn().mockReturnValue({
       projectFileMap: {},
       globalFiles: [],
       externalReferences: {},
@@ -33,14 +34,14 @@ describe('buildProjectGraphAndSourceMapsWithoutDaemon', () => {
       name: 'test-plugin',
       createNodes: [
         '*',
-        jest.fn().mockImplementation(async () => {
+        vi.fn().mockImplementation(async () => {
           const graph = await buildProjectGraphAndSourceMapsWithoutDaemon();
           return [];
         }),
       ],
     } as any;
 
-    jest.spyOn(plugins, 'getPluginsSeparated').mockImplementation(async () => ({
+    vi.spyOn(plugins, 'getPluginsSeparated').mockImplementation(async () => ({
       specifiedPlugins: [testPlugin],
       defaultPlugins: [],
     }));
@@ -66,7 +67,7 @@ describe('buildProjectGraphAndSourceMapsWithoutDaemon', () => {
       name: 'test-plugin',
       createNodes: [
         '*',
-        jest.fn().mockImplementation(async () => {
+        vi.fn().mockImplementation(async () => {
           if (!global.NX_GRAPH_CREATION) {
             const graph = await buildProjectGraphAndSourceMapsWithoutDaemon();
           }
@@ -74,7 +75,7 @@ describe('buildProjectGraphAndSourceMapsWithoutDaemon', () => {
         }),
       ],
     } as any;
-    jest.spyOn(plugins, 'getPluginsSeparated').mockImplementation(async () => ({
+    vi.spyOn(plugins, 'getPluginsSeparated').mockImplementation(async () => ({
       specifiedPlugins: [testPlugin],
       defaultPlugins: [],
     }));
@@ -88,12 +89,12 @@ describe('buildProjectGraphAndSourceMapsWithoutDaemon', () => {
       name: 'test-plugin',
       createNodes: [
         '*',
-        jest.fn().mockImplementation(async () => {
+        vi.fn().mockImplementation(async () => {
           return [];
         }),
       ],
     } as any;
-    jest.spyOn(plugins, 'getPluginsSeparated').mockImplementation(async () => ({
+    vi.spyOn(plugins, 'getPluginsSeparated').mockImplementation(async () => ({
       specifiedPlugins: [testPlugin],
       defaultPlugins: [],
     }));

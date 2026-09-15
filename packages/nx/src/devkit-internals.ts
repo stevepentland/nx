@@ -87,9 +87,22 @@ export {
   registerTsProject,
   loadTsFile,
   forceRegisterEsmLoader,
+  isRequireInEsmScopeError,
+  isTsEsmNamedExportLinkageError,
   requireWithTsconfigFallback,
 } from './plugins/js/utils/register';
 export { interpolate } from './tasks-runner/utils';
+export {
+  getEnvFilesForTask,
+  getGraphTimeDotEnvForTask,
+} from './tasks-runner/task-env';
+export { getEnvPathsForTask } from './tasks-runner/task-env-paths';
+export {
+  hashDaemonClientEnv,
+  getDaemonClientEnvGeneration,
+  getAppliedDaemonClientEnv,
+  applyDaemonEnvFromClient,
+} from './daemon/client/daemon-environment';
 export { isCI } from './utils/is-ci';
 export {
   isUsingPrettierInTree,
@@ -162,6 +175,7 @@ export { hashFile } from './hasher/file-hasher';
 export { filterUsingGlobPatterns, getTargetInputs } from './hasher/task-hasher';
 export type { JsonInput } from './native';
 export { killProcessTreeGraceful } from './native';
+export { killChildOnHostExit } from './utils/kill-child-on-host-exit';
 export { connectToNxCloud } from './nx-cloud/generators/connect-to-nx-cloud/connect-to-nx-cloud';
 export type { NxCloudOnBoardingStatus } from './nx-cloud/models/onboarding-status';
 export {
@@ -270,7 +284,7 @@ export {
   readFileIfExisting,
 } from './utils/fileutils';
 export { getLatestCommitSha } from './utils/git-utils';
-export { combineGlobPatterns } from './utils/globs';
+export { combineGlobPatterns, isGlobPattern } from './utils/globs';
 export { getNxRequirePaths } from './utils/installation-directory';
 export { NX_PREFIX } from './utils/logger';
 export type {
@@ -302,6 +316,7 @@ export {
   findAllProjectNodeDependencies,
   getSourceDirOfDependentProjects,
 } from './utils/project-graph-utils';
+export { quoteShellArg } from './utils/shell-quoting';
 export type { SyncGeneratorResult } from './utils/sync-generators';
 export { SyncError } from './utils/sync-generators';
 export { nxVersion } from './utils/versions';

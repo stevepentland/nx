@@ -46,13 +46,22 @@ Rules are processed **top-to-bottom, first match wins**. Specific rules must com
 
 If no redirect matches, Next.js rewrites handle:
 
-| Pattern            | Destination                       | Description              |
-| ------------------ | --------------------------------- | ------------------------ |
-| `/docs`            | `${ASTRO_URL}/docs`               | Documentation root       |
-| `/docs/:path*`     | `${ASTRO_URL}/docs/:path*`        | All documentation pages  |
-| `/.netlify/:path*` | `${ASTRO_URL}/.netlify/:path*`    | Netlify functions/assets |
-| `/llms.txt`        | `${ASTRO_URL}/docs/llms.txt`      | LLM-friendly docs index  |
-| `/llms-full.txt`   | `${ASTRO_URL}/docs/llms-full.txt` | Full LLM documentation   |
+| Pattern                            | Destination                                         | Description                  |
+| ---------------------------------- | --------------------------------------------------- | ---------------------------- |
+| `/docs`                            | `${ASTRO_URL}/docs`                                 | Documentation root           |
+| `/docs/:path*`                     | `${ASTRO_URL}/docs/:path*`                          | All documentation pages      |
+| `/.netlify/:path*`                 | `${ASTRO_URL}/.netlify/:path*`                      | Netlify functions/assets     |
+| `/llms.txt`                        | `${ASTRO_URL}/docs/llms.txt`                        | LLM-friendly docs index      |
+| `/llms-full.txt`                   | `${ASTRO_URL}/docs/llms-full.txt`                   | Full LLM documentation       |
+| `/.well-known/agent-skills/:path*` | `${ASTRO_URL}/docs/.well-known/agent-skills/:path*` | Agent Skills Discovery index |
+
+Anything under `/.well-known/` has to be added to `rewrite-framer-urls.ts`'s
+`excludedPath` as well, or the Framer proxy answers it first and the rewrite
+never runs.
+
+The agent-skills payload is not committed. `astro-docs/scripts/sync-agent-skills.mjs`
+generates it into `astro-docs/public/` during Netlify builds only, so a local
+build or a CI run serves nothing at that path.
 
 ### 4. Next.js App Router
 
@@ -323,7 +332,7 @@ This is especially important when updating `NEXT_PUBLIC_FRAMER_URL`, `NEXT_PUBLI
 
 ## Deploy Previews
 
-- **nx-dev (Next.js):** `https://deploy-preview-{PR}--nxdev.netlify.app`
+- **nx-dev (Next.js):** `https://deploy-preview-{PR}--nx-dev.netlify.app`
 - **astro-docs:** `https://deploy-preview-{PR}--nx-docs.netlify.app`
 
 During deploy previews, the Next.js app automatically configures `NEXT_PUBLIC_ASTRO_URL` to point to the matching Astro preview based on `REVIEW_ID`.

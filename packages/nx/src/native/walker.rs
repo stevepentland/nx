@@ -4,8 +4,6 @@ use std::path::{Path, PathBuf};
 
 use crate::native::glob::build_glob_set;
 
-#[cfg(not(target_arch = "wasm32"))]
-use crate::native::logger::enable_logger;
 use crate::native::utils::{Normalize, get_mod_time, git::parent_gitignore_files};
 use walkdir::WalkDir;
 
@@ -109,7 +107,6 @@ where
 
     use crossbeam_channel::unbounded;
     use tracing::trace;
-    enable_logger();
 
     let directory = directory.as_ref();
     let mut walker = create_walker(directory, use_ignores);
@@ -208,6 +205,11 @@ where
     let mut walker = WalkBuilder::new(&directory);
     walker.require_git(false);
     walker.hidden(false);
+
+    // `.ignore` is a ripgrep convention the ignore crate enables by default.
+    // Nx never chose it, and the watcher does not read it, so honouring it here
+    // would drop files the watcher still admits.
+    walker.ignore(false);
 
     if use_ignores {
         // Handle parent .gitignore files based on git repository boundaries
@@ -513,6 +515,56 @@ nested/child-two/
         assert!(
             !files.iter().any(|f| f == "a-unix-socket"),
             "unix socket should be skipped, got: {:?}",
+            files
+        );
+    }
+
+    // `.ignore` is a ripgrep convention the ignore crate turns on by default.
+    // Nx never chose it and the watch filterer does not read it, so the walk
+    // must not either.
+    #[test]
+    fn does_not_honour_dot_ignore() {
+        let temp_dir = setup_fs();
+        temp_dir.child(".ignore").write_str("foo.txt\n").unwrap();
+
+        let files: Vec<_> = nx_walker(temp_dir.path(), true)
+            .map(|f| f.normalized_path)
+            .collect();
+
+        assert!(
+            files.iter().any(|f| f == "foo.txt"),
+            "a .ignore entry should not exclude foo.txt, got: {:?}",
+            files
+        );
+    }
+
+    // The reference semantics the watch filterer's rank-before-depth sort
+    // mirrors: the ignore crate keeps the deepest match per class and then
+    // prefers the higher class, so a .nxignore wins over a .gitignore that
+    // sits deeper.
+    #[test]
+    fn nxignore_outranks_a_deeper_gitignore_negation() {
+        let temp_dir = setup_fs();
+        temp_dir
+            .child("pkg/.nxignore")
+            .write_str("keep.tmp\n")
+            .unwrap();
+        temp_dir
+            .child("pkg/deep/.gitignore")
+            .write_str("!keep.tmp\n")
+            .unwrap();
+        temp_dir
+            .child("pkg/deep/keep.tmp")
+            .write_str("data")
+            .unwrap();
+
+        let files: Vec<_> = nx_walker(temp_dir.path(), true)
+            .map(|f| f.normalized_path)
+            .collect();
+
+        assert!(
+            !files.iter().any(|f| f == "pkg/deep/keep.tmp"),
+            "the shallower .nxignore should outrank the deeper .gitignore negation, got: {:?}",
             files
         );
     }

@@ -79,6 +79,13 @@ describe('@nx/rspack', () => {
                   "build": {
                     "cache": true,
                     "command": "rspack build",
+                    "configurations": {
+                      "development": {
+                        "args": [
+                          "--node-env=development",
+                        ],
+                      },
+                    },
                     "dependsOn": [
                       "^build",
                     ],
@@ -110,6 +117,15 @@ describe('@nx/rspack', () => {
                   "preview": {
                     "command": "rspack serve",
                     "continuous": true,
+                    "inputs": [
+                      "production",
+                      "^production",
+                      {
+                        "externalDependencies": [
+                          "@rspack/cli",
+                        ],
+                      },
+                    ],
                     "options": {
                       "args": [
                         "--node-env=production",
@@ -123,6 +139,15 @@ describe('@nx/rspack', () => {
                   "serve": {
                     "command": "rspack serve",
                     "continuous": true,
+                    "inputs": [
+                      "production",
+                      "^production",
+                      {
+                        "externalDependencies": [
+                          "@rspack/cli",
+                        ],
+                      },
+                    ],
                     "options": {
                       "args": [
                         "--node-env=development",
@@ -139,6 +164,15 @@ describe('@nx/rspack', () => {
                       "build",
                     ],
                     "executor": "@nx/web:file-server",
+                    "inputs": [
+                      "production",
+                      "^production",
+                      {
+                        "externalDependencies": [
+                          "@rspack/cli",
+                        ],
+                      },
+                    ],
                     "options": {
                       "buildTarget": "build",
                       "port": 9000,

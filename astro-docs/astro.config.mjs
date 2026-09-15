@@ -6,6 +6,7 @@ import react from '@astrojs/react';
 import markdoc from '@astrojs/markdoc';
 import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
+import { unified } from '@astrojs/markdown-remark';
 import { sidebar } from './sidebar.mts';
 import rehypeTableOptionLinks from './src/plugins/utils/rehype-table-option-links.ts';
 import { resolveNxDevUrl } from './src/utils/resolve-nx-dev-url.ts';
@@ -42,8 +43,13 @@ export default defineConfig({
     },
   },
   markdown: {
-    rehypePlugins: [rehypeTableOptionLinks],
+    // Astro 7 defaults to Satteri. This plugin only runs on loader-generated
+    // markdown (the renderMarkdown path), so we stay on unified for it.
+    processor: unified({ rehypePlugins: [rehypeTableOptionLinks] }),
   },
+  // Astro 7 defaults this to 'jsx', which strips whitespace between inline
+  // elements and joins words together in prose.
+  compressHTML: true,
   trailingSlash: 'never',
   redirects: {
     '/concepts/inferred-tasks': '/docs/concepts/mental-model',
@@ -57,6 +63,7 @@ export default defineConfig({
     '/technologies/react/guides/use-environment-variables-in-react':
       '/docs/reference/environment-variables#loading-environment-variables',
     '/knowledge-base/installation': '/docs/kb/installation-and-updates',
+    '/kb/overview-react': '/docs/kb/storybook-for-react',
     '/kb/project-graph-plugins': '/docs/kb/add-language-support',
     '/kb/intro': '/docs/kb/add-language-support',
     '/kb/tooling-plugin': '/docs/kb/add-language-support',
@@ -96,8 +103,6 @@ export default defineConfig({
     // https://starlight.astro.build/reference/configuration/
     starlight({
       title: 'Nx',
-      tagline:
-        'Get to green PRs in half the time. Nx optimizes your builds, scales your CI, and fixes failed PRs. Built for developers and AI agents.',
       customCss: ['./src/styles/global.css'],
       favicon: '/favicon.svg',
       logo: {

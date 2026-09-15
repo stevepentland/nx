@@ -1,26 +1,36 @@
-jest.mock('./runner', () => ({ runAgentic: jest.fn() }));
-jest.mock('./definitions', () => ({ getAgentDefinition: jest.fn() }));
-jest.mock('./handoff', () => ({
-  ...jest.requireActual('./handoff'),
-  mkdirSafely: jest.fn(),
+import type { Mock } from 'vitest';
+vi.mock('./runner', () => ({ runAgentic: vi.fn() }));
+vi.mock('./definitions', () => ({ getAgentDefinition: vi.fn() }));
+vi.mock('./handoff', async () => ({
+  ...(await vi.importActual('./handoff')),
+  mkdirSafely: vi.fn(),
 }));
-jest.mock('../migrate-output', () => ({
-  resetSgrAfterAgent: jest.fn(),
+vi.mock('./instruction-files', () => ({
+  writeStepInstructionFiles: vi.fn(),
 }));
-jest.mock('../../../utils/logger', () => ({
-  logger: { info: jest.fn() },
+vi.mock('../migrate-output', () => ({
+  resetSgrAfterAgent: vi.fn(),
 }));
-jest.mock('../../../utils/package-manager', () => ({
-  detectPackageManager: jest.fn().mockReturnValue('npm'),
-  getPackageManagerCommand: jest.fn().mockReturnValue({ exec: 'npx' }),
+vi.mock('../../../utils/logger', () => ({
+  logger: { info: vi.fn() },
 }));
-jest.mock('../../../utils/child-process', () => ({
-  getRunNxBaseCommand: jest.fn().mockReturnValue('npx nx'),
+vi.mock('../../../utils/package-manager', () => ({
+  detectPackageManager: vi.fn().mockReturnValue('npm'),
+  getPackageManagerCommand: vi.fn().mockReturnValue({ exec: 'npx' }),
+}));
+vi.mock('../../../utils/child-process', () => ({
+  getRunNxBaseCommand: vi.fn().mockReturnValue('npx nx'),
 }));
 
-import { dirname, join } from 'path';
+import { dirname } from 'path';
+import { stepHandoffPath } from './handoff';
 import { runAgentic } from './runner';
 import { getAgentDefinition } from './definitions';
+import { writeStepInstructionFiles } from './instruction-files';
+import {
+  buildInlineSystemContext,
+  buildMinimalSystemContext,
+} from './prompts/system-prompt';
 import { runAgenticPromptStep } from './run-step';
 import {
   DetectedInstalledAgent,
@@ -28,8 +38,18 @@ import {
   HandoffOutcome,
 } from './types';
 
-const mockRunAgentic = runAgentic as jest.Mock;
-const mockGetDefinition = getAgentDefinition as jest.Mock;
+const mockRunAgentic = runAgentic as Mock;
+const mockGetDefinition = getAgentDefinition as Mock;
+const mockWriteInstructionFiles = writeStepInstructionFiles as Mock;
+
+const PROMPTS_DIR =
+  'prompts/@nx+test+m1-b8120fb43e4a804c45a80036cd51c33e1936d1f6edac5538ba677ba73ae5749a';
+const SYSTEM_PROMPT_FILE = `/ws/.nx/migrate-runs/20.0.0/${PROMPTS_DIR}/system.md`;
+const INSTRUCTIONS_POINTER = `Your instructions for this migration step are in the file .nx/migrate-runs/20.0.0/${PROMPTS_DIR}/instructions.md`;
+const HANDOFF_FILE = stepHandoffPath(
+  '/ws/.nx/migrate-runs/20.0.0',
+  makeMigration()
+);
 
 function makeAgentic(): EnabledResolvedAgentic {
   const detected: DetectedInstalledAgent = {
@@ -63,23 +83,67 @@ function configureRun(outcome: HandoffOutcome) {
 }
 
 describe('runAgenticPromptStep', () => {
-  let installDeps: jest.Mock;
+  let installDeps: Mock;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockRunAgentic.mockReset();
     mockGetDefinition.mockReset();
     // mockClear (not mockReset) — mockReset wipes the factory return
-    // values set at jest.mock() time, so detectPackageManager etc. would
+    // values set at vi.mock() time, so detectPackageManager etc. would
     // start returning undefined.
-    const { logger } = jest.requireMock('../../../utils/logger') as {
-      logger: { info: jest.Mock };
+    const { logger } = (await import('../../../utils/logger')) as {
+      logger: { info: Mock };
     };
     logger.info.mockClear();
-    const { mkdirSafely } = jest.requireMock('./handoff') as {
-      mkdirSafely: jest.Mock;
+    const { mkdirSafely } = (await import('./handoff')) as {
+      mkdirSafely: Mock;
     };
     mkdirSafely.mockClear();
-    installDeps = jest.fn().mockResolvedValue(undefined);
+    mockWriteInstructionFiles.mockReset();
+    mockWriteInstructionFiles.mockReturnValue({
+      systemPromptFilePath: SYSTEM_PROMPT_FILE,
+      instructionsPointer: INSTRUCTIONS_POINTER,
+    });
+    installDeps = vi.fn().mockResolvedValue(undefined);
+  });
+
+  it('writes both prompts to the run directory and invokes the agent with pointers at them', async () => {
+    configureRun({ kind: 'success', summary: 'applied changes' });
+
+    await runAgenticPromptStep({
+      root: '/ws',
+      migration: makeMigration(),
+      agentic: makeAgentic(),
+      runDir: '/ws/.nx/migrate-runs/20.0.0',
+      installDepsIfChanged: installDeps,
+    });
+
+    const written = mockWriteInstructionFiles.mock.calls[0][0];
+    expect(written.workspaceRoot).toBe('/ws');
+    expect(written.runDir).toBe('/ws/.nx/migrate-runs/20.0.0');
+    expect(written.migration).toMatchObject({
+      package: '@nx/test',
+      name: 'm1',
+    });
+    expect(written.systemPrompt).toContain('<handoff_contract>');
+    expect(written.instructions).toContain('prompts/m1.md');
+
+    const { invocationContext } = mockRunAgentic.mock.calls[0][0];
+    expect(invocationContext.systemPromptFilePath).toBe(SYSTEM_PROMPT_FILE);
+    expect(invocationContext.instructionsPointer).toBe(INSTRUCTIONS_POINTER);
+    expect(invocationContext.systemPrompt).toBe(written.systemPrompt);
+    // Verbatim rather than by fragment: the Windows command-line budget is
+    // measured on exactly what these two builders return, so it only bounds
+    // the real invocation while this passes their output through untouched.
+    expect(invocationContext.inlineSystemContext).toBe(
+      buildInlineSystemContext({
+        handoffFileAbsolutePath: HANDOFF_FILE,
+        systemPromptFilePath: SYSTEM_PROMPT_FILE,
+      })
+    );
+    expect(invocationContext.inlineSystemContextFallback).toBe(
+      buildMinimalSystemContext(SYSTEM_PROMPT_FILE)
+    );
   });
 
   it('returns the agent summary and calls installDeps on success', async () => {
@@ -112,23 +176,21 @@ describe('runAgenticPromptStep', () => {
       installDepsIfChanged: installDeps,
     });
 
-    const expected = join(
-      '/ws/.nx/migrate-runs/20.0.0',
-      'handoffs',
-      '@nx',
-      'test',
-      'm1.json'
+    expect(HANDOFF_FILE).toMatch(
+      /[\\/]handoffs[\\/]@nx\+test\+m1-[0-9a-f]{64}\.json$/
     );
-    const { mkdirSafely } = jest.requireMock('./handoff') as {
-      mkdirSafely: jest.Mock;
+    const { mkdirSafely } = (await import('./handoff')) as {
+      mkdirSafely: Mock;
     };
     expect(mkdirSafely).toHaveBeenCalledWith(
-      dirname(expected),
+      dirname(HANDOFF_FILE),
       expect.any(String)
     );
     const call = mockRunAgentic.mock.calls[0][0];
-    expect(call.handoffFilePath).toBe(expected);
-    expect(call.invocationContext.systemContext).toContain(expected);
+    expect(call.handoffFilePath).toBe(HANDOFF_FILE);
+    expect(call.handoffsDir).toBe(dirname(HANDOFF_FILE));
+    expect(call.invocationContext.systemPrompt).toContain(HANDOFF_FILE);
+    expect(call.invocationContext.inlineSystemContext).toContain(HANDOFF_FILE);
   });
 
   it('returns ambiguous=true with a placeholder summary on ambiguous-continue, and still installs deps', async () => {
@@ -178,7 +240,7 @@ describe('runAgenticPromptStep', () => {
   });
 
   it('uses "Validation failed" labeling in generic-validation mode failures', async () => {
-    const { logger } = jest.requireMock('../../../utils/logger');
+    const { logger } = await import('../../../utils/logger');
     configureRun({ kind: 'failed', summary: 'tests failed' });
 
     await expect(
@@ -197,7 +259,7 @@ describe('runAgenticPromptStep', () => {
         },
       })
     ).rejects.toThrow();
-    const messages = (logger.info as jest.Mock).mock.calls
+    const messages = (logger.info as Mock).mock.calls
       .map((c) => String(c[0]))
       .join('\n');
     expect(messages).toContain('Validation failed: tests failed');

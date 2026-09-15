@@ -18,8 +18,8 @@ import {
 import { CreateDependenciesContext } from '../../../project-graph/plugins';
 import { hashArray } from '../../../hasher/file-hasher';
 
-jest.mock('node:fs', () => {
-  const memFs = require('memfs').fs;
+vi.mock('node:fs', async () => {
+  const memFs = (await import('memfs')).fs;
   return {
     ...memFs,
     existsSync: (p) => (p.endsWith('.node') ? true : memFs.existsSync(p)),
@@ -28,7 +28,7 @@ jest.mock('node:fs', () => {
 
 // The artifact collector (pruned-output) reads through 'fs', so mirror the mock
 // there for the stringify -> collect round-trip test.
-jest.mock('fs', () => {
+vi.mock('fs', () => {
   const memFs = require('memfs').fs;
   return {
     ...memFs,
@@ -37,16 +37,16 @@ jest.mock('fs', () => {
 });
 
 const { readFileSync: realReadFileSync } =
-  jest.requireActual<typeof import('fs')>('fs');
+  await vi.importActual<typeof import('fs')>('fs');
 function loadJsonFixture(path: string) {
   return JSON.parse(realReadFileSync(path, 'utf-8'));
 }
 
-jest.mock('../../../utils/workspace-root', () => ({
+vi.mock('../../../utils/workspace-root', () => ({
   workspaceRoot: '/root',
 }));
 
-jest.mock('../../../hasher/file-hasher', () => ({
+vi.mock('../../../hasher/file-hasher', () => ({
   hashArray: (values: string[]) => values.join('|'),
 }));
 
@@ -2399,6 +2399,142 @@ snapshots:
         type: 'npm',
       });
       expect(nodes['npm:pnpm']).toBeUndefined();
+    });
+
+    it('should carry the package-manager document into the pruned lockfile', () => {
+      const envDocument = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    configDependencies: {}
+    packageManagerDependencies:
+      pnpm:
+        specifier: 12.3.4
+        version: 12.3.4
+
+packages:
+
+  pnpm@12.3.4:
+    resolution: {integrity: sha512-pnpm-metadata}
+`;
+      const lockFile = `---
+${envDocument}
+---
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
+
+packages:
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-lodash}
+
+snapshots:
+
+  lodash@4.17.21: {}
+`;
+
+      const packageJson = {
+        name: 'test-app',
+        version: '1.0.0',
+        dependencies: { lodash: '^4.17.21' },
+      };
+      const graph: ProjectGraph = {
+        nodes: {},
+        dependencies: {},
+        externalNodes: {
+          'npm:lodash': {
+            type: 'npm',
+            name: 'npm:lodash',
+            data: {
+              version: '4.17.21',
+              packageName: 'lodash',
+              hash: 'sha512-lodash',
+            },
+          },
+        },
+      };
+
+      const result = stringifyPnpmLockfile(
+        pruneProjectGraph(graph, packageJson),
+        lockFile,
+        packageJson,
+        '/virtual'
+      );
+
+      expect(result.startsWith(`---\n${envDocument}\n---\n`)).toBe(true);
+      expect(result).toContain('packageManagerDependencies');
+      expect(result.slice(`---\n${envDocument}\n---\n`.length)).toEqual(
+        stringifyPnpmLockfile(
+          pruneProjectGraph(graph, packageJson),
+          lockFile.slice(`---\n${envDocument}\n---\n`.length),
+          packageJson,
+          '/virtual'
+        )
+      );
+    });
+
+    it('should leave a single-document lockfile unchanged', () => {
+      const lockFile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
+
+packages:
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-lodash}
+
+snapshots:
+
+  lodash@4.17.21: {}
+`;
+      const packageJson = {
+        name: 'test-app',
+        version: '1.0.0',
+        dependencies: { lodash: '^4.17.21' },
+      };
+      const graph: ProjectGraph = {
+        nodes: {},
+        dependencies: {},
+        externalNodes: {
+          'npm:lodash': {
+            type: 'npm',
+            name: 'npm:lodash',
+            data: {
+              version: '4.17.21',
+              packageName: 'lodash',
+              hash: 'sha512-lodash',
+            },
+          },
+        },
+      };
+
+      const result = stringifyPnpmLockfile(
+        pruneProjectGraph(graph, packageJson),
+        lockFile,
+        packageJson,
+        '/virtual'
+      );
+
+      expect(result.startsWith('---')).toBe(false);
+      expect(result).not.toContain('packageManagerDependencies');
     });
   });
 

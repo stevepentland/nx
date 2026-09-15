@@ -6,6 +6,7 @@ import {
   workspaceDataDirectory,
   deriveGroupNameFromTarget,
   globWithWorkspaceContext,
+  quoteShellArg,
 } from '@nx/devkit/internal';
 import {
   CreateDependencies,
@@ -73,10 +74,7 @@ export interface VitestPluginOptions {
   discoverTestFiles?: 'glob' | 'vitest';
 }
 
-type VitestTargets = Pick<
-  ProjectConfiguration,
-  'targets' | 'metadata' | 'projectType'
->;
+type VitestTargets = Pick<ProjectConfiguration, 'targets' | 'metadata'>;
 
 /**
  * @deprecated The 'createDependencies' function is now a no-op. This functionality is included in 'createNodesV2'.
@@ -166,13 +164,12 @@ export const createNodes: CreateNodes<VitestPluginOptions> = [
           if (!cached) {
             return { projects: {} };
           }
-          const { projectType, metadata, targets } = cached;
+          const { metadata, targets } = cached;
 
           const project: ProjectConfiguration = {
             root: projectRoot,
             targets,
             metadata,
-            projectType,
           };
 
           return {
@@ -307,10 +304,36 @@ async function buildVitestTargets(
       // Resolve under `mode: 'test'` to match Vitest, which defaults the Vite
       // mode to 'test'; a config that branches on `command`/`mode` would
       // otherwise enumerate a different spec set here than at test time.
+      // Capture the raw root after user hooks: graph construction and the
+      // atom run resolve it against different cwds.
+      let configuredViteRoot: string | undefined;
       const viteServeConfig = await resolveConfig(
         {
           configFile: absoluteConfigFilePath,
           mode: 'test',
+          plugins: [
+            {
+              // Promotes test.root before user hooks as Vitest does, so a
+              // later hook can override it. No options.root: atoms pass no --root.
+              name: 'nx-promote-vitest-root',
+              enforce: 'pre' as const,
+              config(config: { root?: string; test?: { root?: string } }) {
+                if (config.test?.root) {
+                  return { root: config.test.root };
+                }
+              },
+            },
+            {
+              name: 'nx-capture-vitest-root',
+              enforce: 'post' as const,
+              config: {
+                order: 'post' as const,
+                handler(config: { root?: string }) {
+                  configuredViteRoot = config.root;
+                },
+              },
+            },
+          ],
         },
         'serve'
       );
@@ -323,6 +346,45 @@ async function buildVitestTargets(
           useGlobDiscovery ? viteServeConfig : undefined,
           viteServeConfig.test?.dir
         );
+
+      // Each atom writes coverage to its own directory or the reports would
+      // overwrite one another. The nested flag never enables coverage.
+      const coverageReportsDirectory =
+        viteServeConfig.test?.coverage?.reportsDirectory || 'coverage';
+      // Atom directories mirror spec paths. A shared base outside the project
+      // gets a project-root prefix unless it already ends with it, as the
+      // generated `<offset>/coverage/<projectRoot>` configs do.
+      const fullProjectRoot = resolve(context.workspaceRoot, projectRoot);
+      // A relative reportsDirectory resolves against the Vitest root, mapped
+      // here as the atom run would (cwd is the project root). A root computed
+      // from runtime state such as `process.cwd()` cannot be mapped and is
+      // not supported.
+      const effectiveVitestRoot = !configuredViteRoot
+        ? fullProjectRoot
+        : isAbsolute(configuredViteRoot)
+          ? configuredViteRoot
+          : resolve(fullProjectRoot, configuredViteRoot);
+      const resolvedReportsDirectory = resolve(
+        effectiveVitestRoot,
+        coverageReportsDirectory
+      );
+      // Vitest refuses a reports directory equal to its root or cwd, and redirecting
+      // under it would point each atom at its own spec path for coverage to delete.
+      const vitestRejectsReportsDirectory =
+        relative(effectiveVitestRoot, resolvedReportsDirectory) === '' ||
+        relative(fullProjectRoot, resolvedReportsDirectory) === '';
+      const atomSubfolderPrefix =
+        isPathOutside(relative(fullProjectRoot, resolvedReportsDirectory)) &&
+        !endsWithProjectRoot(resolvedReportsDirectory, projectRoot)
+          ? projectRoot
+          : '';
+      // The cache only accepts outputs inside the workspace. A base outside it
+      // cannot be declared, and a cache hit would then replay without writing
+      // coverage, so the atoms and their parent are not cached either.
+      const isCoverageCacheable = !isPathOutside(
+        relative(context.workspaceRoot, resolvedReportsDirectory)
+      );
+      const atomOutputs: string[] = [];
 
       for (const relativePath of projectRootRelativeTestPaths) {
         if (relativePath.includes('../')) {
@@ -341,14 +403,37 @@ async function buildVitestTargets(
           );
         }
 
+        const outputSubfolder = atomSubfolderPrefix
+          ? joinPathFragments(atomSubfolderPrefix, relativePath)
+          : relativePath;
+        // joinPathFragments strips Windows drive letters, so an absolute
+        // reports directory must be joined with the OS path helper.
+        const atomCoverageDirectory = isAbsolute(coverageReportsDirectory)
+          ? join(coverageReportsDirectory, outputSubfolder)
+          : joinPathFragments(coverageReportsDirectory, outputSubfolder);
         const targetName = `${options.ciTargetName}--${relativePath}`;
         dependsOn.push(targetName);
         targets[targetName] = {
           // It does not make sense to run atomized tests in watch mode as they are intended to be run in CI
-          command: `vitest run ${relativePath}`,
-          cache: targets[options.testTargetName].cache,
+          command: `vitest run ${quoteShellArg(relativePath)}${
+            vitestRejectsReportsDirectory
+              ? ''
+              : ` --coverage.reportsDirectory=${quoteShellArg(
+                  atomCoverageDirectory
+                )}`
+          }`,
+          cache: isCoverageCacheable && targets[options.testTargetName].cache,
           inputs: targets[options.testTargetName].inputs,
-          outputs: targets[options.testTargetName].outputs,
+          outputs:
+            isCoverageCacheable && !vitestRejectsReportsDirectory
+              ? [
+                  normalizeAtomOutputPath(
+                    join(resolvedReportsDirectory, outputSubfolder),
+                    fullProjectRoot,
+                    context.workspaceRoot
+                  ),
+                ]
+              : [],
           options: {
             cwd: projectRoot,
             env: targets[options.testTargetName].options.env,
@@ -366,15 +451,18 @@ async function buildVitestTargets(
             },
           },
         };
+        atomOutputs.push(...targets[targetName].outputs);
         targetGroup.push(targetName);
       }
 
       if (targetGroup.length > 0) {
         targets[options.ciTargetName] = {
           executor: 'nx:noop',
-          cache: true,
+          cache: isCoverageCacheable,
           inputs: targets[options.testTargetName].inputs,
-          outputs: targets[options.testTargetName].outputs,
+          // Exactly the atom directories: a cache restore replaces each declared
+          // directory, and any wider one can hold other projects' coverage.
+          outputs: atomOutputs,
           dependsOn,
           metadata: {
             technologies: ['vitest'],
@@ -395,7 +483,7 @@ async function buildVitestTargets(
     }
   }
 
-  return { targets, metadata, projectType: 'library' };
+  return { targets, metadata };
 }
 
 async function testTarget(
@@ -487,6 +575,58 @@ function getOutputs(
   };
 }
 
+/**
+ * Whether a `relative()` result leaves the base directory. A directory named
+ * `..coverage` is a child, not traversal.
+ */
+function isPathOutside(relativePath: string): boolean {
+  return (
+    relativePath === '..' ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  );
+}
+
+/**
+ * Maps an atom's absolute coverage directory, which must be inside the
+ * workspace, to the narrowest Nx root token.
+ */
+function normalizeAtomOutputPath(
+  absoluteOutputPath: string,
+  fullProjectRoot: string,
+  workspaceRoot: string
+): string {
+  const relativeToProject = relative(fullProjectRoot, absoluteOutputPath);
+  if (!isPathOutside(relativeToProject)) {
+    return joinPathFragments('{projectRoot}', relativeToProject);
+  }
+  return joinPathFragments(
+    '{workspaceRoot}',
+    relative(workspaceRoot, absoluteOutputPath)
+  );
+}
+
+/**
+ * Whether the reports directory ends with the project root's segments. The
+ * root project has none, so it always holds.
+ */
+function endsWithProjectRoot(
+  resolvedPath: string,
+  projectRoot: string
+): boolean {
+  const pathSegments = resolvedPath.split(/[\\/]/).filter(Boolean);
+  const rootSegments = projectRoot
+    .split('/')
+    .filter((segment) => segment && segment !== '.');
+  return (
+    pathSegments.length >= rootSegments.length &&
+    rootSegments.every(
+      (segment, i) =>
+        pathSegments[pathSegments.length - rootSegments.length + i] === segment
+    )
+  );
+}
+
 function normalizeOutputPath(
   outputPath: string | undefined,
   projectRoot: string,
@@ -546,6 +686,36 @@ function collectTsconfigInputsByProjectRoot(
 
   const rootTsConfigName = getRootTsConfigFileName();
 
+  // A directory cache requires project-specific filtering on replay.
+  const dirChainCache = new Map<string, string[]>();
+  const collectDirChain = (dir: string): string[] => {
+    const cached = dirChainCache.get(dir);
+    if (cached !== undefined) return cached;
+    const paths: string[] = [];
+    const localSeen = new Set<string>();
+    const tsconfigPath = dir
+      ? join(workspaceRoot, dir, 'tsconfig.json')
+      : join(workspaceRoot, 'tsconfig.json');
+    if (existsSync(tsconfigPath)) {
+      walkTsconfigExtendsChain(
+        tsconfigPath,
+        (absPath) => {
+          const wsRelative = relative(workspaceRoot, absPath)
+            .split(sep)
+            .join('/');
+          if (!localSeen.has(wsRelative)) {
+            localSeen.add(wsRelative);
+            paths.push(wsRelative);
+          }
+          return 'continue';
+        },
+        { jsonCache }
+      );
+    }
+    dirChainCache.set(dir, paths);
+    return paths;
+  };
+
   for (const projectRoot of projectRoots) {
     if (projectRoot === '.') continue;
 
@@ -553,10 +723,7 @@ function collectTsconfigInputsByProjectRoot(
     const seen = new Set<string>();
     const projectPrefix = `${projectRoot}/`;
 
-    const collect = (absolutePath: string) => {
-      const wsRelative = relative(workspaceRoot, absolutePath)
-        .split(sep)
-        .join('/');
+    const collectWsRelative = (wsRelative: string) => {
       if (seen.has(wsRelative)) return;
       seen.add(wsRelative);
       if (wsRelative.startsWith('../') || wsRelative === '..') return;
@@ -571,13 +738,15 @@ function collectTsconfigInputsByProjectRoot(
       outside.push(wsRelative);
     };
 
-    // 1. Walk the project tsconfig's extends chain
     const projectTsconfig = join(workspaceRoot, projectRoot, 'tsconfig.json');
     if (existsSync(projectTsconfig)) {
       walkTsconfigExtendsChain(
         projectTsconfig,
         (absPath) => {
-          collect(absPath);
+          const wsRelative = relative(workspaceRoot, absPath)
+            .split(sep)
+            .join('/');
+          collectWsRelative(wsRelative);
           return 'continue';
         },
         { jsonCache }
@@ -588,16 +757,8 @@ function collectTsconfigInputsByProjectRoot(
     //    between the entry point and the filesystem root)
     let dir = dirname(projectRoot);
     while (dir && dir !== '.') {
-      const ancestorTsconfig = join(workspaceRoot, dir, 'tsconfig.json');
-      if (existsSync(ancestorTsconfig)) {
-        walkTsconfigExtendsChain(
-          ancestorTsconfig,
-          (absPath) => {
-            collect(absPath);
-            return 'continue';
-          },
-          { jsonCache }
-        );
+      for (const wsRelative of collectDirChain(dir)) {
+        collectWsRelative(wsRelative);
       }
       const parent = dirname(dir);
       if (parent === dir) break;
@@ -605,16 +766,8 @@ function collectTsconfigInputsByProjectRoot(
     }
 
     // 3. Check the workspace root itself (dirname loop above stops at '.')
-    const rootTsconfig = join(workspaceRoot, 'tsconfig.json');
-    if (existsSync(rootTsconfig)) {
-      walkTsconfigExtendsChain(
-        rootTsconfig,
-        (absPath) => {
-          collect(absPath);
-          return 'continue';
-        },
-        { jsonCache }
-      );
+    for (const wsRelative of collectDirChain('')) {
+      collectWsRelative(wsRelative);
     }
 
     if (outside.length > 0) {

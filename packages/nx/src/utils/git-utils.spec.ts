@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import {
   parseVcsRemoteUrl,
   getVcsRemoteInfo,
@@ -10,13 +11,15 @@ import {
 } from './git-utils';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
-jest.mock('child_process');
-jest.mock('fs', () => {
-  const actual: typeof import('fs') = jest.requireActual('fs');
+vi.mock('child_process');
+vi.mock('fs', async () => {
+  const actual: typeof import('fs') = await vi.importActual('fs');
   return {
     ...actual,
-    readFileSync: jest.fn(actual.readFileSync),
+    readFileSync: vi.fn(actual.readFileSync),
   };
 });
 
@@ -158,88 +161,395 @@ describe('git utils tests', () => {
   });
 
   describe('getVcsRemoteInfo', () => {
+    // Outside any repository, so no `.git/config` can be found and the git
+    // command below is genuinely what answers. Without this the tests read this
+    // checkout's own remote, which is `nrwl/nx` — the same value two of them
+    // assert, so they would pass no matter what the mock returned.
+    let nonGitDir: string;
+
+    beforeEach(() => {
+      nonGitDir = fs.mkdtempSync(join(tmpdir(), 'nx-no-git-'));
+    });
+
     afterEach(() => {
-      jest.resetAllMocks();
+      fs.rmSync(nonGitDir, { recursive: true, force: true });
+      vi.resetAllMocks();
     });
 
     it('should return VCS info for GitHub remote', () => {
-      (execSync as jest.Mock).mockReturnValue(`
+      (execSync as Mock).mockReturnValue(`
         origin	git@github.com:nrwl/nx.git (fetch)
         origin	git@github.com:nrwl/nx.git (push)
       `);
 
-      expect(getVcsRemoteInfo()).toEqual({
+      expect(getVcsRemoteInfo(nonGitDir)).toEqual({
         domain: 'github.com',
         slug: 'nrwl/nx',
       });
     });
 
     it('should return VCS info for GitLab remote', () => {
-      (execSync as jest.Mock).mockReturnValue(`
+      (execSync as Mock).mockReturnValue(`
         origin	git@gitlab.com:group/project.git (fetch)
         origin	git@gitlab.com:group/project.git (push)
       `);
 
-      expect(getVcsRemoteInfo()).toEqual({
+      expect(getVcsRemoteInfo(nonGitDir)).toEqual({
         domain: 'gitlab.com',
         slug: 'group/project',
       });
     });
 
     it('should prioritize origin over other remotes', () => {
-      (execSync as jest.Mock).mockReturnValue(`
+      (execSync as Mock).mockReturnValue(`
         upstream	git@gitlab.com:other/project.git (fetch)
         upstream	git@gitlab.com:other/project.git (push)
         origin	git@github.com:nrwl/nx.git (fetch)
         origin	git@github.com:nrwl/nx.git (push)
       `);
 
-      expect(getVcsRemoteInfo()).toEqual({
+      expect(getVcsRemoteInfo(nonGitDir)).toEqual({
         domain: 'github.com',
         slug: 'nrwl/nx',
       });
     });
 
     it('should return null when no remotes exist', () => {
-      (execSync as jest.Mock).mockReturnValue('');
+      (execSync as Mock).mockReturnValue('');
 
-      expect(getVcsRemoteInfo()).toBeNull();
+      expect(getVcsRemoteInfo(nonGitDir)).toBeNull();
     });
 
     it('should return null when execSync throws', () => {
-      (execSync as jest.Mock).mockImplementation(() => {
+      (execSync as Mock).mockImplementation(() => {
         throw new Error('git not found');
       });
 
-      expect(getVcsRemoteInfo()).toBeNull();
+      expect(getVcsRemoteInfo(nonGitDir)).toBeNull();
     });
+  });
+
+  // The happy path, and why this exists: `cacheDir` resolves at module scope and
+  // reaches the repo identity, so `git remote -v` used to spawn a shell and git
+  // on the import path of every Nx process.
+  describe('getVcsRemoteInfo reading .git/config directly', () => {
+    let repo: string;
+
+    // `HEAD` and `objects/` too: `locateGitDir` refuses a bare `.git` directory
+    // without them, so a fixture lacking them would exercise the refusal rather
+    // than the parser.
+    const writeConfig = (dir: string, contents: string) => {
+      fs.mkdirSync(join(dir, '.git', 'objects'), { recursive: true });
+      fs.writeFileSync(join(dir, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+      fs.writeFileSync(join(dir, '.git', 'config'), contents);
+    };
+
+    beforeEach(() => {
+      repo = fs.mkdtempSync(join(tmpdir(), 'nx-git-config-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(repo, { recursive: true, force: true });
+      vi.resetAllMocks();
+    });
+
+    it('should read the remote without spawning git', () => {
+      writeConfig(
+        repo,
+        '[remote "origin"]\n\turl = git@github.com:nrwl/nx.git\n'
+      );
+
+      expect(getVcsRemoteInfo(repo)).toEqual({
+        domain: 'github.com',
+        slug: 'nrwl/nx',
+      });
+      expect(execSync).not.toHaveBeenCalled();
+    });
+
+    it('should find the config from a subdirectory', () => {
+      writeConfig(
+        repo,
+        '[remote "origin"]\n\turl = git@github.com:nrwl/nx.git\n'
+      );
+      const nested = join(repo, 'packages', 'nx');
+      fs.mkdirSync(nested, { recursive: true });
+
+      expect(getVcsRemoteInfo(nested)).toEqual({
+        domain: 'github.com',
+        slug: 'nrwl/nx',
+      });
+      expect(execSync).not.toHaveBeenCalled();
+    });
+
+    it('should apply the same remote priority as the git output path', () => {
+      writeConfig(
+        repo,
+        '[remote "upstream"]\n\turl = git@gitlab.com:other/project.git\n' +
+          '[remote "origin"]\n\turl = git@github.com:nrwl/nx.git\n'
+      );
+
+      expect(getVcsRemoteInfo(repo)).toEqual({
+        domain: 'github.com',
+        slug: 'nrwl/nx',
+      });
+    });
+
+    it('should defer to git when the config includes another file', () => {
+      // git resolves include/includeIf by reading elsewhere; a remote could live
+      // in a file this parser never opens, so answering from here would be a
+      // guess. Falling through is the point of the test.
+      writeConfig(
+        repo,
+        '[include]\n\tpath = ../shared.config\n' +
+          '[remote "origin"]\n\turl = git@github.com:nrwl/nx.git\n'
+      );
+      (execSync as Mock).mockReturnValue(
+        'origin\tgit@gitlab.com:group/project.git (fetch)\n'
+      );
+
+      expect(getVcsRemoteInfo(repo)).toEqual({
+        domain: 'gitlab.com',
+        slug: 'group/project',
+      });
+      expect(execSync).toHaveBeenCalled();
+    });
+
+    it('should read a linked worktree config through its common dir', () => {
+      // A linked worktree's `.git` is a FILE pointing at a per-worktree gitdir,
+      // and remotes live in the shared common dir rather than in it.
+      writeConfig(
+        repo,
+        '[remote "origin"]\n\turl = git@github.com:nrwl/nx.git\n'
+      );
+      const gitDir = join(repo, '.git', 'worktrees', 'wt');
+      fs.mkdirSync(gitDir, { recursive: true });
+      fs.writeFileSync(join(gitDir, 'commondir'), '../..\n');
+
+      const worktree = fs.mkdtempSync(join(tmpdir(), 'nx-git-wt-'));
+      fs.writeFileSync(join(worktree, '.git'), `gitdir: ${gitDir}\n`);
+
+      try {
+        expect(getVcsRemoteInfo(worktree)).toEqual({
+          domain: 'github.com',
+          slug: 'nrwl/nx',
+        });
+        expect(execSync).not.toHaveBeenCalled();
+      } finally {
+        fs.rmSync(worktree, { recursive: true, force: true });
+      }
+    });
+
+    // Everything a test creates belongs to the test, so a foreign owner is
+    // simulated from the other side: pretend to be a different uid.
+    (typeof process.getuid === 'function' ? it : it.skip)(
+      'should defer to git for a .git directory belonging to someone else',
+      () => {
+        // Shape alone does not settle it: a real repository owned by another
+        // user has HEAD and objects. The walk goes up past the workspace into
+        // directories the caller may not own, and git refuses a foreign-owned
+        // repository for this reason (safe.directory, CVE-2022-24765).
+        writeConfig(
+          repo,
+          '[remote "origin"]\n\turl = git@github.com:attacker/planted.git\n'
+        );
+        const notUs = vi
+          .spyOn(process, 'getuid')
+          .mockReturnValue(process.getuid!() + 1);
+        (execSync as Mock).mockReturnValue('');
+
+        try {
+          expect(getVcsRemoteInfo(repo)).toBeNull();
+          expect(execSync).toHaveBeenCalled();
+        } finally {
+          notUs.mockRestore();
+        }
+      }
+    );
+
+    (typeof process.getuid === 'function' ? it : it.skip)(
+      'should defer to git for a config file belonging to someone else',
+      () => {
+        // Separate from the directory check: the file is what gets read, and
+        // the owner is taken from fstat on the descriptor that is read.
+        writeConfig(
+          repo,
+          '[remote "origin"]\n\turl = git@github.com:attacker/planted.git\n'
+        );
+        const fstat = vi.spyOn(fs, 'fstatSync').mockReturnValue({
+          isFile: () => true,
+          uid: process.getuid!() + 1,
+        } as fs.Stats);
+        (execSync as Mock).mockReturnValue('');
+
+        try {
+          expect(getVcsRemoteInfo(repo)).toBeNull();
+          expect(execSync).toHaveBeenCalled();
+        } finally {
+          fstat.mockRestore();
+        }
+      }
+    );
+
+    it('should defer to git when the config names no remote', () => {
+      writeConfig(repo, '[core]\n\tbare = false\n');
+      (execSync as Mock).mockReturnValue('');
+
+      expect(getVcsRemoteInfo(repo)).toBeNull();
+      expect(execSync).toHaveBeenCalled();
+    });
+
+    it('should defer to git when a url carries an inline comment', () => {
+      // Git ends a value at an unquoted `#`; parsing it here would carry the
+      // trailer into the slug and on into the Nx Cloud onboarding payload.
+      writeConfig(
+        repo,
+        '[remote "origin"]\n\turl = git@github.com:nrwl/nx.git # mirror\n'
+      );
+      (execSync as Mock).mockReturnValue(
+        'origin\tgit@github.com:nrwl/nx.git (fetch)\n'
+      );
+
+      expect(getVcsRemoteInfo(repo)).toEqual({
+        domain: 'github.com',
+        slug: 'nrwl/nx',
+      });
+      expect(execSync).toHaveBeenCalled();
+    });
+
+    it('should defer to git when a url carries an insteadOf rewrite', () => {
+      // `git remote -v` prints the rewritten url; this parser reads the raw one.
+      writeConfig(
+        repo,
+        '[url "git@github.com:"]\n\tinsteadOf = https://mirror.internal/\n' +
+          '[remote "origin"]\n\turl = https://mirror.internal/nrwl/nx.git\n'
+      );
+      (execSync as Mock).mockReturnValue(
+        'origin\tgit@github.com:nrwl/nx.git (fetch)\n'
+      );
+
+      expect(getVcsRemoteInfo(repo)).toEqual({
+        domain: 'github.com',
+        slug: 'nrwl/nx',
+      });
+      expect(execSync).toHaveBeenCalled();
+    });
+
+    it('should ignore a .git directory that is not a repository', () => {
+      // Only a config file: git reports "not a git repository" here, so an
+      // ancestor `.git` planted in a writable directory must not decide the
+      // identity of everything beneath it.
+      fs.mkdirSync(join(repo, '.git'), { recursive: true });
+      fs.writeFileSync(
+        join(repo, '.git', 'config'),
+        '[remote "origin"]\n\turl = git@github.com:attacker/planted.git\n'
+      );
+      (execSync as Mock).mockReturnValue('');
+
+      expect(getVcsRemoteInfo(repo)).toBeNull();
+    });
+
+    // Windows needs elevation to create symlinks; the guard is the same either way.
+    it.skipIf(process.platform === 'win32')(
+      'should defer to git when the config is a symlink out of the repository',
+      () => {
+        // `readFileSync` follows a symlink and succeeds, so without an `lstat`
+        // check the identity comes from a file outside the repository. The
+        // motivating sibling is a FIFO, which blocks `open` forever -- and this
+        // resolves at module scope of `cache-directory.ts`, so every command in
+        // the workspace would hang before printing anything.
+        writeConfig(
+          repo,
+          '[remote "origin"]\n\turl = git@github.com:nrwl/nx.git\n'
+        );
+        const outside = join(repo, 'planted.config');
+        fs.writeFileSync(
+          outside,
+          '[remote "origin"]\n\turl = git@github.com:attacker/planted.git\n'
+        );
+        const configPath = join(repo, '.git', 'config');
+        fs.rmSync(configPath);
+        fs.symlinkSync(outside, configPath);
+        (execSync as Mock).mockReturnValue(
+          'origin\tgit@github.com:nrwl/nx.git (fetch)\n'
+        );
+
+        expect(getVcsRemoteInfo(repo)).toEqual({
+          domain: 'github.com',
+          slug: 'nrwl/nx',
+        });
+        expect(execSync).toHaveBeenCalled();
+      }
+    );
+
+    // mkfifo is POSIX-only; on Windows there is nothing to plant.
+    (process.platform === 'win32' ? it.skip : it)(
+      'should defer to git when the config is a FIFO rather than a file',
+      async () => {
+        // The sibling the symlink test's comment names. `O_NONBLOCK` is what
+        // makes opening one safe: without it `open` waits for a writer that
+        // never comes, and this resolves at module scope of
+        // `cache-directory.ts`, so every command in the workspace hangs before
+        // printing anything.
+        //
+        // Note the failure mode if `O_NONBLOCK` is ever dropped: this test
+        // HANGS rather than failing, until the suite timeout kills it. That is
+        // a worse signal than a red assertion and a far better one than leaving
+        // the flag uncovered -- a hung git-utils suite means look at the open
+        // flags in `readOwnedFileSync`.
+        //
+        // `child_process` is mocked in this file, so the FIFO has to be created
+        // through the real module; with the mock it is never created at all and
+        // this passes vacuously.
+        const realCp =
+          await vi.importActual<typeof import('child_process')>(
+            'child_process'
+          );
+        writeConfig(
+          repo,
+          '[remote "origin"]\n\turl = git@github.com:nrwl/nx.git\n'
+        );
+        const configPath = join(repo, '.git', 'config');
+        fs.rmSync(configPath);
+        realCp.execFileSync('mkfifo', [configPath]);
+        expect(fs.lstatSync(configPath).isFIFO()).toBe(true);
+        (execSync as Mock).mockReturnValue(
+          'origin\tgit@github.com:nrwl/nx.git (fetch)\n'
+        );
+
+        expect(getVcsRemoteInfo(repo)).toEqual({
+          domain: 'github.com',
+          slug: 'nrwl/nx',
+        });
+        expect(execSync).toHaveBeenCalled();
+      }
+    );
   });
 
   describe('getGitCurrentBranch', () => {
     afterEach(() => {
-      jest.resetAllMocks();
+      vi.resetAllMocks();
     });
 
     it('should return the current branch name', () => {
-      (execSync as jest.Mock).mockReturnValue('main\n');
+      (execSync as Mock).mockReturnValue('main\n');
 
       expect(getGitCurrentBranch()).toBe('main');
     });
 
     it('should return null for a detached HEAD', () => {
-      (execSync as jest.Mock).mockReturnValue('HEAD\n');
+      (execSync as Mock).mockReturnValue('HEAD\n');
 
       expect(getGitCurrentBranch()).toBeNull();
     });
 
     it('should return null for empty output', () => {
-      (execSync as jest.Mock).mockReturnValue('\n');
+      (execSync as Mock).mockReturnValue('\n');
 
       expect(getGitCurrentBranch()).toBeNull();
     });
 
     it('should return null when execSync throws', () => {
-      (execSync as jest.Mock).mockImplementation(() => {
+      (execSync as Mock).mockImplementation(() => {
         throw new Error('not a git repository');
       });
 
@@ -249,23 +559,23 @@ describe('git utils tests', () => {
 
   describe('getWorkingTreeStatus', () => {
     afterEach(() => {
-      jest.resetAllMocks();
+      vi.resetAllMocks();
     });
 
     it('should return dirty when git status reports changes', () => {
-      (execSync as jest.Mock).mockReturnValue(' M file.ts\n');
+      (execSync as Mock).mockReturnValue(' M file.ts\n');
 
       expect(getWorkingTreeStatus('/repo')).toBe('dirty');
     });
 
     it('should return clean when git status reports nothing', () => {
-      (execSync as jest.Mock).mockReturnValue('\n');
+      (execSync as Mock).mockReturnValue('\n');
 
       expect(getWorkingTreeStatus('/repo')).toBe('clean');
     });
 
     it('should return unknown, not clean, when the probe throws', () => {
-      (execSync as jest.Mock).mockImplementation(() => {
+      (execSync as Mock).mockImplementation(() => {
         throw new Error('spawn git EAGAIN');
       });
 
@@ -273,7 +583,7 @@ describe('git utils tests', () => {
     });
 
     it('should probe the whole tree with no pathspec when nothing is excluded', () => {
-      (execSync as jest.Mock).mockReturnValue('');
+      (execSync as Mock).mockReturnValue('');
 
       getWorkingTreeStatus('/repo');
 
@@ -284,7 +594,7 @@ describe('git utils tests', () => {
     });
 
     it('should leave excluded paths out of the probe with exclude-only pathspecs', () => {
-      (execSync as jest.Mock).mockReturnValue('');
+      (execSync as Mock).mockReturnValue('');
 
       getWorkingTreeStatus('/repo', ['.nx/migrate-runs', 'tmp']);
 
@@ -297,7 +607,7 @@ describe('git utils tests', () => {
 
   describe('getPathCommitExposure', () => {
     afterEach(() => {
-      jest.resetAllMocks();
+      vi.resetAllMocks();
     });
 
     function failWithStatus(status: number): Error & { status: number } {
@@ -305,7 +615,7 @@ describe('git utils tests', () => {
     }
 
     it('should return tracked when files under the path are in the index, without consulting check-ignore', () => {
-      (execSync as jest.Mock).mockReturnValueOnce(
+      (execSync as Mock).mockReturnValueOnce(
         '.nx/migrate-runs/run-1/run.json\n'
       );
 
@@ -320,7 +630,7 @@ describe('git utils tests', () => {
     });
 
     it('should return ignored when nothing is tracked and check-ignore matches', () => {
-      (execSync as jest.Mock).mockReturnValueOnce('\n').mockReturnValueOnce('');
+      (execSync as Mock).mockReturnValueOnce('\n').mockReturnValueOnce('');
 
       expect(getPathCommitExposure('.nx/migrate-runs', '/repo')).toBe(
         'ignored'
@@ -335,7 +645,7 @@ describe('git utils tests', () => {
     });
 
     it('should not double the trailing slash when the caller already passes one', () => {
-      (execSync as jest.Mock).mockReturnValueOnce('\n').mockReturnValueOnce('');
+      (execSync as Mock).mockReturnValueOnce('\n').mockReturnValueOnce('');
 
       expect(getPathCommitExposure('.nx/migrate-runs/', '/repo')).toBe(
         'ignored'
@@ -347,7 +657,7 @@ describe('git utils tests', () => {
     });
 
     it('should return unignored when nothing is tracked and check-ignore reports no coverage', () => {
-      (execSync as jest.Mock)
+      (execSync as Mock)
         .mockReturnValueOnce('\n')
         .mockImplementationOnce(() => {
           throw failWithStatus(1);
@@ -359,7 +669,7 @@ describe('git utils tests', () => {
     });
 
     it('should return unknown when the ls-files probe fails', () => {
-      (execSync as jest.Mock).mockImplementationOnce(() => {
+      (execSync as Mock).mockImplementationOnce(() => {
         throw new Error('spawn git EAGAIN');
       });
 
@@ -370,7 +680,7 @@ describe('git utils tests', () => {
     });
 
     it('should return unknown when check-ignore fails for any reason other than "not ignored"', () => {
-      (execSync as jest.Mock)
+      (execSync as Mock)
         .mockReturnValueOnce('\n')
         .mockImplementationOnce(() => {
           throw failWithStatus(128);
@@ -383,10 +693,10 @@ describe('git utils tests', () => {
   });
 
   describe('getUncommittedChangesSnapshot', () => {
-    const mockReadFileSync = fs.readFileSync as jest.Mock;
+    const mockReadFileSync = fs.readFileSync as Mock;
 
     afterEach(() => {
-      jest.resetAllMocks();
+      vi.resetAllMocks();
     });
 
     function mockGit(map: {
@@ -397,7 +707,7 @@ describe('git utils tests', () => {
       statusThrows?: boolean;
       untrackedThrows?: boolean;
     }): void {
-      (execSync as jest.Mock).mockImplementation((cmd: string) => {
+      (execSync as Mock).mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff HEAD')) {
           if (map.diffThrows) throw new Error('git diff failed');
           return map.diff ?? '';
@@ -498,11 +808,11 @@ describe('git utils tests', () => {
 
   describe('tryCommitChanges', () => {
     afterEach(() => {
-      jest.resetAllMocks();
+      vi.resetAllMocks();
     });
 
     it('stages the whole tree and resets nothing when no exclusions are given', () => {
-      (execSync as jest.Mock).mockReturnValue('');
+      (execSync as Mock).mockReturnValue('');
 
       tryCommitChanges('msg', '/workspace');
 
@@ -510,7 +820,7 @@ describe('git utils tests', () => {
         'git add -A',
         expect.objectContaining({ cwd: '/workspace' })
       );
-      const commands = (execSync as jest.Mock).mock.calls.map((c) => c[0]);
+      const commands = (execSync as Mock).mock.calls.map((c) => c[0]);
       expect(commands.some((c) => c.startsWith('git reset'))).toBe(false);
     });
 
@@ -518,11 +828,11 @@ describe('git utils tests', () => {
       // An add-time exclusion pathspec cannot do this: `git add` exits 1 when
       // a pathspec names an ignored directory, and it cannot unstage entries
       // that were staged before this call.
-      (execSync as jest.Mock).mockReturnValue('');
+      (execSync as Mock).mockReturnValue('');
 
       tryCommitChanges('msg', '/workspace', ['.nx/migrate-runs']);
 
-      const commands = (execSync as jest.Mock).mock.calls.map((c) => c[0]);
+      const commands = (execSync as Mock).mock.calls.map((c) => c[0]);
       expect(commands).toEqual([
         'git add -A',
         'git reset -q -- ".nx/migrate-runs"',
@@ -548,7 +858,7 @@ describe('git utils tests', () => {
           stdout: Buffer.from(''),
         }
       );
-      (execSync as jest.Mock).mockImplementation((cmd: string) => {
+      (execSync as Mock).mockImplementation((cmd: string) => {
         if (cmd.startsWith('git commit')) throw originalErr;
         // Production code passes `encoding: 'utf8'` to `execSync`, so
         // mirror that with a string return rather than a Buffer.
@@ -574,11 +884,11 @@ describe('git utils tests', () => {
     const shaB = 'b'.repeat(40);
 
     afterEach(() => {
-      jest.resetAllMocks();
+      vi.resetAllMocks();
     });
 
     it('returns true when git confirms the ancestry', () => {
-      (execSync as jest.Mock).mockReturnValue('');
+      (execSync as Mock).mockReturnValue('');
 
       expect(isAncestorCommit(shaA, shaB, '/repo')).toBe(true);
       expect(execSync).toHaveBeenCalledWith(
@@ -588,14 +898,14 @@ describe('git utils tests', () => {
     });
 
     it('accepts 64-char object ids from sha256 repositories', () => {
-      (execSync as jest.Mock).mockReturnValue('');
+      (execSync as Mock).mockReturnValue('');
       const sha256 = 'a'.repeat(64);
 
       expect(isAncestorCommit(sha256, sha256, '/repo')).toBe(true);
     });
 
     it('returns false when git rejects or fails', () => {
-      (execSync as jest.Mock).mockImplementation(() => {
+      (execSync as Mock).mockImplementation(() => {
         throw new Error('exit 1');
       });
 

@@ -1,9 +1,9 @@
 import * as stream from 'node:stream';
 import * as yargs from 'yargs';
 
-jest.mock('../../native', () => ({
-  ...jest.requireActual('../../native'),
-  isAiAgent: jest.fn(() => false),
+vi.mock('../../native', async () => ({
+  ...(await vi.importActual('../../native')),
+  isAiAgent: vi.fn(() => false),
   IS_WASM: false,
 }));
 
@@ -47,9 +47,32 @@ describe('shared-options', () => {
       );
     });
 
+    it('should split a --files value on every comma, while stdin keeps a comma-bearing path whole', async () => {
+      // yargs runs `coerce` only on an instance's first parse, so each case
+      // needs an instance of its own to see production's ordering.
+      const split = await withAffectedOptions(yargs.default([])).parseAsync([
+        'affected',
+        '--files',
+        'libs/a,b/src/index.ts',
+      ]);
+      expect(split.files).toEqual(['libs/a', 'b/src/index.ts']);
+
+      const stdinMock = new stream.PassThrough();
+      vi.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
+      stdinMock.push('libs/a,b/src/index.ts\n');
+      stdinMock.push(null);
+
+      const piped = await withAffectedOptions(yargs.default([])).parseAsync([
+        'affected',
+        '--stdin',
+      ]);
+      expect(piped.files).toEqual(['libs/a,b/src/index.ts']);
+      stdinMock.end();
+    });
+
     it('should parse newline-delimited files from stdin', async () => {
       const stdinMock = new stream.PassThrough();
-      jest.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
+      vi.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
 
       stdinMock.push('file1\nfile2\nfile3\n');
       stdinMock.push(null);
@@ -68,7 +91,7 @@ describe('shared-options', () => {
 
     it('should parse files from stdin split across chunks', async () => {
       const stdinMock = new stream.PassThrough();
-      jest.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
+      vi.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
 
       stdinMock.push('file1\nfil');
       stdinMock.push('e2\nfile3');
@@ -88,7 +111,7 @@ describe('shared-options', () => {
 
     it('should parse files from stdin and a single --files option', async () => {
       const stdinMock = new stream.PassThrough();
-      jest.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
+      vi.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
 
       stdinMock.push('file1\nfile2\nfile3\n');
       stdinMock.push(null);
@@ -112,7 +135,7 @@ describe('shared-options', () => {
 
     it('should parse files from stdin and multiple --files options', async () => {
       const stdinMock = new stream.PassThrough();
-      jest.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
+      vi.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
 
       stdinMock.push('file1\nfile2\n');
       stdinMock.push(null);
@@ -139,7 +162,7 @@ describe('shared-options', () => {
     it('should throw when --stdin is used with a TTY', async () => {
       const stdinMock = new stream.PassThrough();
       Object.defineProperty(stdinMock, 'isTTY', { value: true });
-      jest.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
+      vi.spyOn(process, 'stdin', 'get').mockReturnValue(stdinMock as any);
 
       await expect(command.parseAsync(['affected', '--stdin'])).rejects.toThrow(
         /--stdin option requires piped input/
